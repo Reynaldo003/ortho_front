@@ -98,7 +98,7 @@ export default function Login() {
             console.log("FORGOT RAW:", resp.status, data);
 
             setForgotMsg(
-                "Si el usuario existe, te llegará un correo con tu usuario y una contraseña temporal."
+                "Si el usuario existe, la solicitud fue enviada al correo de administración para la contraseña temporal."
             );
             setForgotValue("");
         } catch (err) {
