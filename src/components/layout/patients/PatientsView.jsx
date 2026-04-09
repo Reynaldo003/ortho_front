@@ -33,7 +33,7 @@ import {
 } from "./PatientUtils";
 
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 async function openProtectedBinary(url, { filename = "documento.pdf", download = false } = {}) {
   const token = localStorage.getItem("auth.access");

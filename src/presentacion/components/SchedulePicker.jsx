@@ -18,8 +18,12 @@ const schema = z.object({
   time: z.string().optional(),
 });
 
-const RAW_API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
-const API_ROOT = /\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`;
+//const RAW_API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
+//const API_ROOT = /\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`;
+const RAW_API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const API_ROOT = RAW_API_BASE
+  ? (/\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`)
+  : "/api";
 
 function buildApiUrl(path) {
   const cleanPath = String(path || "").replace(/^\/+/, "");

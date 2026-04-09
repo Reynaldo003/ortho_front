@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { saveSessionTokens } from "../utils/authSession";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 const BRAND_CYAN = "#3dc2d5";
 const BRAND_GREEN = "#6cc067";

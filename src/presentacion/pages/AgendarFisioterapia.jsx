@@ -13,8 +13,12 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-const RAW_API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
-const API_ROOT = /\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`;
+//const RAW_API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
+//const API_ROOT = /\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`;
+const RAW_API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const API_ROOT = RAW_API_BASE
+  ? (/\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`)
+  : "/api";
 const FERNANDO_NAME = "Lic. José Fernando Porras Pulido";
 
 function buildApiUrl(path) {

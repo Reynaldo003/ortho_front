@@ -35,7 +35,7 @@ import {
 } from "lucide-react";
 import { clearSession, startSessionRefresh } from "./utils/authSession";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 const ROLE_DOCTOR = "doctor";
 const ROLE_FISIOTERAPEUTA = "fisioterapeuta";

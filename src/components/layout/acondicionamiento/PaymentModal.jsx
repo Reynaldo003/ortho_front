@@ -1,7 +1,7 @@
 // src/components/reservations/PaymentModal.jsx
 import { useMemo, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 function normalizarMetodoPago(metodo) {
     if (!metodo) return "efectivo";
