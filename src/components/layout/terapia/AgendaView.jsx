@@ -525,10 +525,14 @@ export function AgendaView({
     roleNormalizado === "doctor" ||
     roleNormalizado === "recepcionista";
 
-  const auxProfessionals = useMemo(() => {
-    return (professionals || []).filter(
-      (p) => getProfessionalRole(p) === "aux_fisioterapia"
-    );
+  const managedProfessionals = useMemo(() => {
+    return (professionals || []).filter((p) => {
+      const rolProfesional = getProfessionalRole(p);
+      return (
+        rolProfesional === "aux_fisioterapia" ||
+        rolProfesional === "fisioterapeuta"
+      );
+    });
   }, [professionals]);
 
   const [now, setNow] = useState(() => new Date());
@@ -594,9 +598,9 @@ export function AgendaView({
     }
 
     if (isLeadPhysio) {
-      const auxIds = new Set(auxProfessionals.map((p) => Number(p.id)));
+      const managedIds = new Set(managedProfessionals.map((p) => Number(p.id)));
       list = list.filter((item) =>
-        auxIds.has(Number(item.professionalId))
+        managedIds.has(Number(item.professionalId))
       );
     }
 
@@ -1203,7 +1207,7 @@ export function AgendaView({
     }
 
     if (isLeadPhysio) {
-      return auxProfessionals;
+      return managedProfessionals;
     }
 
     if (canSeeAll) {
@@ -1216,7 +1220,7 @@ export function AgendaView({
     isAuxPhysio,
     myUserId,
     isLeadPhysio,
-    auxProfessionals,
+    managedProfessionals,
     canSeeAll,
   ]);
 
@@ -1237,7 +1241,7 @@ export function AgendaView({
     : isAuxPhysio && myUserId
       ? (professionals || []).filter((p) => Number(p.id) === Number(myUserId))
       : isLeadPhysio
-        ? auxProfessionals
+        ? managedProfessionals
         : professionals || [];
 
   const defaultProfessionalId =
@@ -1271,7 +1275,7 @@ export function AgendaView({
                     {isAuxPhysio
                       ? "Mostrando solo tus citas"
                       : isLeadPhysio
-                        ? "Mostrando agendas de auxiliares de fisioterapia"
+                        ? "Mostrando agendas de fisioterapeutas y auxiliares"
                         : "Agenda compartida"}
                   </span>
                 </div>
