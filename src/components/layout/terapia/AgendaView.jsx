@@ -185,6 +185,27 @@ function getAppointmentPalette(appt, professionalsMap) {
   const colorHex = prof?.color_agenda || "#06b6d4";
   return buildProfessionalPalette(colorHex);
 }
+function normalizeStaffRole(value) {
+  const raw = String(value || "").trim().toLowerCase();
+
+  if (
+    raw === "aux_fisioterapia" ||
+    raw === "auxiliar_fisioterapia" ||
+    raw === "subfisioterapeuta" ||
+    raw === "sub_fisioterapeuta"
+  ) {
+    return "aux_fisioterapia";
+  }
+
+  if (raw === "recepcion") return "recepcionista";
+  if (raw === "admin") return "doctor";
+
+  return raw;
+}
+
+function getProfessionalRole(item) {
+  return normalizeStaffRole(item?.rol || item?.role || item?.rol_out || "");
+}
 
 function HoverCard({ open, anchorRect, children }) {
   if (!open || !anchorRect) return null;
@@ -493,19 +514,22 @@ export function AgendaView({
   const [slotMenu, setSlotMenu] = useState(null);
   const [includeSunday, setIncludeSunday] = useState(false);
 
-  const isProfessional =
-    role === "fisioterapeuta" ||
-    role === "aux_fisioterapia" ||
-    role === "auxiliar_fisioterapia" ||
-    role === "subfisioterapeuta" ||
-    role === "sub_fisioterapeuta";
+  const roleNormalizado = normalizeStaffRole(role);
+
+  const isAuxPhysio = roleNormalizado === "aux_fisioterapia";
+  const isLeadPhysio = roleNormalizado === "fisioterapeuta";
+  const isProfessional = isLeadPhysio || isAuxPhysio;
 
   const canSeeAll =
-    role === "admin" ||
-    role === "doctor" ||
-    role === "recepcion" ||
-    role === "fisioterapeuta" ||
-    role === "recepcionista";
+    roleNormalizado === "admin" ||
+    roleNormalizado === "doctor" ||
+    roleNormalizado === "recepcionista";
+
+  const auxProfessionals = useMemo(() => {
+    return (professionals || []).filter(
+      (p) => getProfessionalRole(p) === "aux_fisioterapia"
+    );
+  }, [professionals]);
 
   const [now, setNow] = useState(() => new Date());
   const todayIso = useMemo(() => dateKey(new Date()), []);
@@ -559,10 +583,21 @@ export function AgendaView({
   );
 
   const visibleAppointments = useMemo(() => {
-    let list = [...(appointments || [])].filter((item) => (item.agendaTipo || item.agenda_tipo || "general") === agendaTipo);
+    let list = [...(appointments || [])].filter(
+      (item) => (item.agendaTipo || item.agenda_tipo || "general") === agendaTipo
+    );
 
-    if (!canSeeAll && isProfessional && myUserId) {
-      list = list.filter((item) => Number(item.professionalId) === Number(myUserId));
+    if (isAuxPhysio && myUserId) {
+      list = list.filter(
+        (item) => Number(item.professionalId) === Number(myUserId)
+      );
+    }
+
+    if (isLeadPhysio) {
+      const auxIds = new Set(auxProfessionals.map((p) => Number(p.id)));
+      list = list.filter((item) =>
+        auxIds.has(Number(item.professionalId))
+      );
     }
 
     return list.map((item) => {
@@ -574,7 +609,15 @@ export function AgendaView({
         __textColor: palette.textColor,
       };
     });
-  }, [appointments, professionalsMap, agendaTipo, canSeeAll, isProfessional, myUserId]);
+  }, [
+    appointments,
+    professionalsMap,
+    agendaTipo,
+    isAuxPhysio,
+    myUserId,
+    isLeadPhysio,
+    auxProfessionals,
+  ]);
 
   const activeAppt = useMemo(
     () => (visibleAppointments || []).find((a) => a.id === activeApptId) || null,
@@ -1153,8 +1196,14 @@ export function AgendaView({
   }
 
   const allowedProfessionals = useMemo(() => {
-    if (isProfessional && myUserId) {
-      return (professionals || []).filter((p) => Number(p.id) === Number(myUserId));
+    if (isAuxPhysio && myUserId) {
+      return (professionals || []).filter(
+        (p) => Number(p.id) === Number(myUserId)
+      );
+    }
+
+    if (isLeadPhysio) {
+      return auxProfessionals;
     }
 
     if (canSeeAll) {
@@ -1162,7 +1211,14 @@ export function AgendaView({
     }
 
     return professionals || [];
-  }, [professionals, isProfessional, myUserId, canSeeAll]);
+  }, [
+    professionals,
+    isAuxPhysio,
+    myUserId,
+    isLeadPhysio,
+    auxProfessionals,
+    canSeeAll,
+  ]);
 
   const professionalsInView = useMemo(() => {
     if (allowedProfessionals.length > 0) return allowedProfessionals;
@@ -1178,9 +1234,15 @@ export function AgendaView({
 
   const oneDayProfessionals = professionalsInView.length
     ? professionalsInView
-    : isProfessional && myUserId
+    : isAuxPhysio && myUserId
       ? (professionals || []).filter((p) => Number(p.id) === Number(myUserId))
-      : professionals || [];
+      : isLeadPhysio
+        ? auxProfessionals
+        : professionals || [];
+
+  const defaultProfessionalId =
+    oneDayProfessionals[0]?.id || (isLeadPhysio ? null : myUserId || null);
+
   return (
     <>
       <div className="flex flex-col w-full h-full min-h-0 overflow-hidden mb-10">
@@ -1206,7 +1268,11 @@ export function AgendaView({
                   <span className="text-xs text-slate-500">{tituloAgenda}</span>
                   <span className="text-sm font-semibold text-slate-800 truncate">{headerMainLabel}</span>
                   <span className="text-[11px] text-slate-500 truncate">
-                    Agenda compartida por fisioterapeuta
+                    {isAuxPhysio
+                      ? "Mostrando solo tus citas"
+                      : isLeadPhysio
+                        ? "Mostrando agendas de auxiliares de fisioterapia"
+                        : "Agenda compartida"}
                   </span>
                 </div>
               </div>
@@ -1274,7 +1340,7 @@ export function AgendaView({
                   className="text-xs px-3 py-1 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-600"
                   onClick={() => {
                     const defaultProfessionalId =
-                      oneDayProfessionals[0]?.id || myUserId || null;
+                      oneDayProfessionals[0]?.id || (isLeadPhysio ? null : myUserId || null);
 
                     onOpenBlockModal?.({
                       date: dateKey(safeCurrentDate),
@@ -1290,7 +1356,7 @@ export function AgendaView({
                 <button
                   onClick={() => {
                     const defaultProfessionalId =
-                      oneDayProfessionals[0]?.id || myUserId || null;
+                      oneDayProfessionals[0]?.id || (isLeadPhysio ? null : myUserId || null);
 
                     onNewReservation?.({
                       date: dateKey(safeCurrentDate),

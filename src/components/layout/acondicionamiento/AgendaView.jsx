@@ -181,6 +181,28 @@ function getAppointmentPalette(appt, professionalsMap) {
     };
   }
 
+  function normalizeStaffRole(value) {
+    const raw = String(value || "").trim().toLowerCase();
+
+    if (
+      raw === "aux_fisioterapia" ||
+      raw === "auxiliar_fisioterapia" ||
+      raw === "subfisioterapeuta" ||
+      raw === "sub_fisioterapeuta"
+    ) {
+      return "aux_fisioterapia";
+    }
+
+    if (raw === "recepcion") return "recepcionista";
+    if (raw === "admin") return "doctor";
+
+    return raw;
+  }
+
+  function getProfessionalRole(item) {
+    return normalizeStaffRole(item?.rol || item?.role || item?.rol_out || "");
+  }
+
   const prof = professionalsMap.get(Number(appt.professionalId));
   const colorHex = prof?.color_agenda || "#06b6d4";
   return buildProfessionalPalette(colorHex);
@@ -489,21 +511,22 @@ export function AgendaView({
 }) {
   const isMobile = useMediaQuery("(max-width: 768px)");
 
-  const roleNormalizado = String(role || "").trim().toLowerCase();
+  const roleNormalizado = normalizeStaffRole(role);
 
-  const isProfessional =
-    roleNormalizado === "fisioterapeuta" ||
-    roleNormalizado === "aux_fisioterapia" ||
-    roleNormalizado === "auxiliar_fisioterapia" ||
-    roleNormalizado === "subfisioterapeuta" ||
-    roleNormalizado === "sub_fisioterapeuta";
+  const isAuxPhysio = roleNormalizado === "aux_fisioterapia";
+  const isLeadPhysio = roleNormalizado === "fisioterapeuta";
+  const isProfessional = isLeadPhysio || isAuxPhysio;
 
   const canSeeAll =
     roleNormalizado === "doctor" ||
     roleNormalizado === "admin" ||
-    roleNormalizado === "recepcion" ||
-    roleNormalizado === "recepcionista" ||
-    roleNormalizado === "fisioterapeuta";
+    roleNormalizado === "recepcionista";
+
+  const auxProfessionals = useMemo(() => {
+    return (professionals || []).filter(
+      (p) => getProfessionalRole(p) === "aux_fisioterapia"
+    );
+  }, [professionals]);
 
   const [viewMode, setViewMode] = useState("week");
   const [displayMode, setDisplayMode] = useState("calendar");
@@ -596,20 +619,44 @@ export function AgendaView({
   }, [professionals]);
 
   const allowedProfessionals = useMemo(() => {
-    if (isProfessional && myUserId) {
-      return (professionals || []).filter((p) => Number(p.id) === Number(myUserId));
+    if (isAuxPhysio && myUserId) {
+      return (professionals || []).filter(
+        (p) => Number(p.id) === Number(myUserId)
+      );
     }
+
+    if (isLeadPhysio) {
+      return auxProfessionals;
+    }
+
     if (canSeeAll) {
       return professionals || [];
     }
+
     return professionals || [];
-  }, [professionals, isProfessional, myUserId, canSeeAll]);
+  }, [
+    professionals,
+    isAuxPhysio,
+    myUserId,
+    isLeadPhysio,
+    auxProfessionals,
+    canSeeAll,
+  ]);
 
   const visibleAppointments = useMemo(() => {
     let list = [...(appointments || [])];
 
-    if (isProfessional && myUserId) {
-      list = list.filter((item) => Number(item.professionalId) === Number(myUserId));
+    if (isAuxPhysio && myUserId) {
+      list = list.filter(
+        (item) => Number(item.professionalId) === Number(myUserId)
+      );
+    }
+
+    if (isLeadPhysio) {
+      const auxIds = new Set(auxProfessionals.map((p) => Number(p.id)));
+      list = list.filter((item) =>
+        auxIds.has(Number(item.professionalId))
+      );
     }
 
     return list.map((item) => {
@@ -621,7 +668,14 @@ export function AgendaView({
         __textColor: palette.textColor,
       };
     });
-  }, [appointments, isProfessional, myUserId, professionalsMap]);
+  }, [
+    appointments,
+    isAuxPhysio,
+    myUserId,
+    isLeadPhysio,
+    auxProfessionals,
+    professionalsMap,
+  ]);
 
   const activeAppt = useMemo(
     () => (visibleAppointments || []).find((a) => a.id === activeApptId) || null,
@@ -655,9 +709,14 @@ export function AgendaView({
 
   const activeColumns = professionalsInView.length
     ? professionalsInView
-    : isProfessional && myUserId
+    : isAuxPhysio && myUserId
       ? (professionals || []).filter((p) => Number(p.id) === Number(myUserId))
-      : professionals || [];
+      : isLeadPhysio
+        ? auxProfessionals
+        : professionals || [];
+
+  const defaultProfessionalId =
+    activeColumns[0]?.id || (isLeadPhysio ? null : myUserId || null);
 
   let headerMainLabel = "";
   if (viewMode === "day") {
@@ -1276,9 +1335,11 @@ export function AgendaView({
                   <span className="text-xs text-slate-500">Acondicionamiento</span>
                   <span className="text-sm font-semibold text-slate-800 truncate">{headerMainLabel}</span>
                   <span className="text-[11px] text-slate-500 truncate">
-                    {isProfessional
+                    {isAuxPhysio
                       ? "Mostrando solo tus citas"
-                      : "Agenda compartida por fisioterapeuta"}
+                      : isLeadPhysio
+                        ? "Mostrando agendas de auxiliares de fisioterapia"
+                        : "Agenda compartida"}
                   </span>
                 </div>
               </div>
@@ -1346,7 +1407,7 @@ export function AgendaView({
                   className="text-xs px-3 py-1 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-600"
                   onClick={() => {
                     const defaultProfessionalId =
-                      activeColumns[0]?.id || myUserId || null;
+                      activeColumns[0]?.id || (isLeadPhysio ? null : myUserId || null);
 
                     onOpenBlockModal?.({
                       date: dateKey(safeCurrentDate),
@@ -1362,7 +1423,7 @@ export function AgendaView({
                 <button
                   onClick={() => {
                     const defaultProfessionalId =
-                      activeColumns[0]?.id || myUserId || null;
+                      activeColumns[0]?.id || (isLeadPhysio ? null : myUserId || null);
 
                     onNewReservation?.({
                       date: dateKey(safeCurrentDate),

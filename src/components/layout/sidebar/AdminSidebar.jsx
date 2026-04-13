@@ -25,10 +25,9 @@ const ROLE_FISIOTERAPEUTA = "fisioterapeuta";
 const ROLE_AUX_FISIOTERAPIA = "aux_fisioterapia";
 const ROLE_RECEPCIONISTA = "recepcionista";
 
-const ADMIN_LIKE_ROLES = [ROLE_DOCTOR, ROLE_FISIOTERAPEUTA];
+const ADMIN_LIKE_ROLES = [ROLE_DOCTOR];
 const CAN_SEE_ALL_AGENDAS_ROLES = [
     ROLE_DOCTOR,
-    ROLE_FISIOTERAPEUTA,
     ROLE_RECEPCIONISTA,
 ];
 const SELF_ONLY_AGENDA_ROLES = [ROLE_AUX_FISIOTERAPIA];
@@ -60,6 +59,19 @@ function isSelfOnlyAgendaRole(role) {
 
 function getAllowedTabsByRole(role) {
     const normalized = normalizeRole(role);
+
+    if (normalized === ROLE_FISIOTERAPEUTA) {
+        return [
+            "pacientes",
+            "acondicionamiento",
+            "terapia",
+            "ventas",
+            "servicios",
+            "comentarios",
+            "equipo",
+            "perfil",
+        ];
+    }
 
     if (isAdminLikeRole(normalized)) {
         return [
