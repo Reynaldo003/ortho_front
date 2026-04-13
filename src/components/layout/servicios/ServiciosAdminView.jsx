@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Upload, X } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 function ModalShell({ title, children, onClose, actions }) {
     return (

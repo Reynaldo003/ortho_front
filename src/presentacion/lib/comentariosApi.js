@@ -1,8 +1,4 @@
-const API_BASE = (
-  import.meta.env.VITE_API_BASE ||
-  import.meta.env.VITE_API_URL ||
-  ""
-).replace(/\/$/, "");
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 async function request(path, options = {}) {
   const headers = {
@@ -50,11 +46,12 @@ export async function obtenerProfesionalesPublicos() {
   const data = await request("/api/public/team/");
 
   return (Array.isArray(data) ? data : [])
-    .filter((item) =>
-      ["fisioterapeuta", "nutriologo", "dentista"].includes(
-        String(item.rol_out || "").toLowerCase(),
-      ),
-    )
+    .filter((item) => {
+      const rol = String(item.rol_out || "").toLowerCase();
+      return ["doctor", "fisioterapeuta", "nutriologo", "dentista"].includes(
+        rol,
+      );
+    })
     .map((item) => ({
       id: item.id,
       tipo_objetivo: "profesional",
@@ -91,6 +88,10 @@ export async function obtenerComentariosPublicos(filtros = {}) {
 
   if (filtros.servicio) {
     params.set("servicio", String(filtros.servicio));
+  }
+
+  if (filtros.objetivo_publico) {
+    params.set("objetivo_publico", String(filtros.objetivo_publico));
   }
 
   const query = params.toString();

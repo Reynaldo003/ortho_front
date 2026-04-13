@@ -1,4 +1,3 @@
-// src/presentacion/components/SchedulePicker.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,16 +17,40 @@ const schema = z.object({
   time: z.string().optional(),
 });
 
-//const RAW_API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
-//const API_ROOT = /\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`;
-const RAW_API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const RAW_API_BASE = "https://ortho-clinic-cordoba.cloud";
+
 const API_ROOT = RAW_API_BASE
-  ? (/\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`)
+  ? /\/api$/i.test(RAW_API_BASE)
+    ? RAW_API_BASE
+    : `${RAW_API_BASE}/api`
   : "/api";
 
 function buildApiUrl(path) {
   const cleanPath = String(path || "").replace(/^\/+/, "");
   return `${API_ROOT}/${cleanPath}`;
+}
+
+function toAbsoluteUrl(value) {
+  const raw = String(value || "").trim();
+
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const baseOrigin = API_ROOT.replace(/\/api$/i, "");
+
+  if (raw.startsWith("/")) {
+    return `${baseOrigin}${raw}`;
+  }
+
+  return buildApiUrl(raw);
+}
+
+function extractApiList(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.results)) return data.results;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  return [];
 }
 
 function normalizeText(value = "") {
@@ -49,11 +72,13 @@ function getTokenScore(a = "", b = "") {
   const right = new Set(normalizeText(b).split(" ").filter(Boolean));
 
   let score = 0;
+
   for (const token of left) {
     if (token.length >= 4 && right.has(token)) {
       score += 1;
     }
   }
+
   return score;
 }
 
@@ -98,7 +123,9 @@ function serviceScoreForPerson(service, person) {
 
 function resolveAgendaTipo(person, service) {
   const role = normalizeText(person?.role || "");
-  const fullText = normalizeText(`${service?.nombre || ""} ${service?.descripcion || ""}`);
+  const fullText = normalizeText(
+    `${service?.nombre || ""} ${service?.descripcion || ""}`
+  );
 
   const isPhysio = role.includes("fisio");
 
@@ -134,6 +161,11 @@ function getMinutesFromDuration(value) {
     return Number(match[1]) * 60 + Number(match[2]);
   }
 
+  const onlyMinutes = Number(text);
+  if (Number.isFinite(onlyMinutes) && onlyMinutes > 0) {
+    return onlyMinutes;
+  }
+
   return 60;
 }
 
@@ -165,6 +197,41 @@ async function fetchJson(url, options = {}) {
   }
 
   return data;
+}
+
+async function fetchAllServices() {
+  let nextUrl = buildApiUrl("servicios/");
+  const collected = [];
+  const seen = new Set();
+  let attempts = 0;
+
+  while (nextUrl && attempts < 30) {
+    const data = await fetchJson(nextUrl);
+    const chunk = extractApiList(data);
+
+    for (const item of chunk) {
+      const key = String(item?.id ?? `${item?.nombre || ""}-${collected.length}`);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      collected.push(item);
+    }
+
+    if (Array.isArray(data)) {
+      break;
+    }
+
+    const next =
+      data?.next ||
+      data?.siguiente ||
+      data?.next_page ||
+      data?.links?.next ||
+      "";
+
+    nextUrl = next ? toAbsoluteUrl(next) : "";
+    attempts += 1;
+  }
+
+  return collected;
 }
 
 export default function SchedulePicker({ person, onPickedChange }) {
@@ -203,11 +270,9 @@ export default function SchedulePicker({ person, onPickedChange }) {
         setServicesLoading(true);
         setServicesError("");
 
-        const data = await fetchJson(buildApiUrl("servicios/"));
+        const list = await fetchAllServices();
 
         if (!active) return;
-
-        const list = Array.isArray(data) ? data : [];
 
         const ranked = list
           .map((service) => ({
@@ -216,12 +281,12 @@ export default function SchedulePicker({ person, onPickedChange }) {
             agenda_tipo: resolveAgendaTipo(person, service),
             minutes: getMinutesFromDuration(service?.duracion),
           }))
-          .sort((a, b) => b._score - a._score || String(a.nombre).localeCompare(String(b.nombre)));
+          .sort((a, b) => {
+            if (b._score !== a._score) return b._score - a._score;
+            return String(a.nombre || "").localeCompare(String(b.nombre || ""));
+          });
 
-        const positive = ranked.filter((item) => item._score > 0);
-        const finalList = positive.length > 0 ? positive : ranked;
-
-        setBackendServices(finalList);
+        setBackendServices(ranked);
       } catch (error) {
         if (!active) return;
         setBackendServices([]);
@@ -242,12 +307,18 @@ export default function SchedulePicker({ person, onPickedChange }) {
 
   useEffect(() => {
     if (!selectedServiceId && backendServices.length > 0) {
-      setValue("service", String(backendServices[0].id), { shouldValidate: true });
+      setValue("service", String(backendServices[0].id), {
+        shouldValidate: true,
+      });
     }
   }, [backendServices, selectedServiceId, setValue]);
 
   const selectedService = useMemo(() => {
-    return backendServices.find((item) => String(item.id) === String(selectedServiceId)) || null;
+    return (
+      backendServices.find(
+        (item) => String(item.id) === String(selectedServiceId)
+      ) || null
+    );
   }, [backendServices, selectedServiceId]);
 
   useEffect(() => {
@@ -336,11 +407,11 @@ export default function SchedulePicker({ person, onPickedChange }) {
         </select>
 
         {errors.service && (
-          <p className="text-xs text-red-600 mt-1">{errors.service.message}</p>
+          <p className="mt-1 text-xs text-red-600">{errors.service.message}</p>
         )}
 
         {servicesError && (
-          <p className="text-xs text-red-600 mt-1">{servicesError}</p>
+          <p className="mt-1 text-xs text-red-600">{servicesError}</p>
         )}
       </div>
 
@@ -350,7 +421,7 @@ export default function SchedulePicker({ person, onPickedChange }) {
         onPick={onPickSlot}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div>
           <label className="text-sm font-medium">Nombre completo</label>
           <input
@@ -359,7 +430,7 @@ export default function SchedulePicker({ person, onPickedChange }) {
             {...register("name")}
           />
           {errors.name && (
-            <p className="text-xs text-red-600 mt-1">{errors.name.message}</p>
+            <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>
           )}
         </div>
 
@@ -379,7 +450,7 @@ export default function SchedulePicker({ person, onPickedChange }) {
             })}
           />
           {errors.phone && (
-            <p className="text-xs text-red-600 mt-1">{errors.phone.message}</p>
+            <p className="mt-1 text-xs text-red-600">{errors.phone.message}</p>
           )}
         </div>
       </div>

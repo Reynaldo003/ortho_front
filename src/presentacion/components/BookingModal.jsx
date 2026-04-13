@@ -20,7 +20,7 @@ import {
 import SchedulePicker from "./SchedulePicker";
 
 const WHATSAPP_URL =
-  import.meta.env.VITE_PUBLIC_WHATSAPP_URL || "https://wa.me/522291234567";
+  import.meta.env.VITE_PUBLIC_WHATSAPP_URL || "https://wa.me/522712105761";
 
 export default function BookingModal({ open, setOpen, person }) {
   const [picked, setPicked] = useState({
@@ -211,7 +211,7 @@ export default function BookingModal({ open, setOpen, person }) {
                           href={WHATSAPP_URL}
                           target="_blank"
                           rel="noreferrer"
-                          className="btn btn-ghost mt-3 w-full"
+                          className="btn btn-ghost mt-3 w-full hover:bg-blue-500"
                           title="Abrir WhatsApp"
                         >
                           <MessageCircle className="mr-2 size-4" />

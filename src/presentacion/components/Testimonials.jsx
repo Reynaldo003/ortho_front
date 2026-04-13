@@ -11,17 +11,39 @@ import {
   crearComentario,
   obtenerComentariosPublicos,
   obtenerProfesionalesPublicos,
-  obtenerServiciosPublicos,
 } from "../lib/comentariosApi";
 
 const FOTOS_FALLBACK = {
   "dr. martin buganza": "/MartinBuganza.png",
   "dr. miguel puig": "/MiguelPuig.png",
-  "rehabilitación general": "/Rehabilitacion.png",
+  "martin buganza": "/MartinBuganza.png",
+  "miguel puig": "/MiguelPuig.png",
   "rehabilitacion general": "/Rehabilitacion.png",
-  "rehabilitación para adultos mayores": "/Rehabilitacion.png",
-  "rehabilitacion para adultos mayores": "/Rehabilitacion.png",
+  "acondicionamiento general": "/Rehabilitacion.png",
 };
+
+const SERVICIOS_PUBLICOS = [
+  {
+    uid: "servicio-publico-rehabilitacion_general",
+    backendId: null,
+    tipo_objetivo: "servicio",
+    objetivo_publico: "rehabilitacion_general",
+    name: "Rehabilitación general",
+    role: "Terapia y rehabilitación física",
+    photo: "/Rehabilitacion.png",
+    tag: "Servicio",
+  },
+  {
+    uid: "servicio-publico-acondicionamiento_general",
+    backendId: null,
+    tipo_objetivo: "servicio",
+    objetivo_publico: "acondicionamiento_general",
+    name: "Acondicionamiento general",
+    role: "Activación física y adulto mayor",
+    photo: "/Rehabilitacion.png",
+    tag: "Servicio",
+  },
+];
 
 function avg(arr) {
   if (!arr || !arr.length) return 0;
@@ -55,14 +77,53 @@ function formatDate(dateString) {
   }
 }
 
+function normalizeText(value = "") {
+  return String(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function obtenerFotoFallback(nombre, tipo) {
-  const clave = String(nombre || "").trim().toLowerCase();
-  if (FOTOS_FALLBACK[clave]) return FOTOS_FALLBACK[clave];
+  const clave = normalizeText(nombre);
+
+  if (clave.includes("buganza")) {
+    return "/MartinBuganza.png";
+  }
+
+  if (clave.includes("puig")) {
+    return "/MiguelPuig.png";
+  }
+
+  if (clave.includes("rehabilitacion")) {
+    return "/Rehabilitacion.png";
+  }
+
+  if (clave.includes("acondicionamiento")) {
+    return "/Rehabilitacion.png";
+  }
+
+  if (FOTOS_FALLBACK[clave]) {
+    return FOTOS_FALLBACK[clave];
+  }
+
   return tipo === "servicio" ? "/Rehabilitacion.png" : "/logo.png";
 }
 
 function construirClaveObjetivo(tipoObjetivo, id) {
   return `${tipoObjetivo}-${id}`;
+}
+
+function construirClaveServicioPublico(slug) {
+  return `servicio-publico-${slug}`;
+}
+
+function esDoctorPermitido(item) {
+  const nombre = normalizeText(item?.nombre || "");
+  return nombre.includes("miguel puig") || nombre.includes("martin buganza");
 }
 
 function Pill({ children }) {
@@ -115,32 +176,26 @@ export default function Testimonials() {
       setLoading(true);
       setFeedback({ type: "", message: "" });
 
-      const [profesionales, servicios, comentarios] = await Promise.all([
+      const [profesionales, comentarios] = await Promise.all([
         obtenerProfesionalesPublicos(),
-        obtenerServiciosPublicos(),
         obtenerComentariosPublicos(),
       ]);
 
+      const doctoresPermitidos = (profesionales || []).filter(esDoctorPermitido);
+
       const targetsNormalizados = [
-        ...profesionales.map((item) => ({
+        ...doctoresPermitidos.map((item) => ({
           uid: construirClaveObjetivo("profesional", item.id),
           backendId: item.id,
           tipo_objetivo: "profesional",
+          objetivo_publico: "",
           name: item.nombre,
-          role: item.subtitulo || "Profesional",
+          role: item.subtitulo || "Doctor",
           photo:
             item.foto_url || obtenerFotoFallback(item.nombre, "profesional"),
           tag: item.tag || "Doctor",
         })),
-        ...servicios.map((item) => ({
-          uid: construirClaveObjetivo("servicio", item.id),
-          backendId: item.id,
-          tipo_objetivo: "servicio",
-          name: item.nombre,
-          role: item.subtitulo || "Servicio",
-          photo: item.foto_url || obtenerFotoFallback(item.nombre, "servicio"),
-          tag: item.tag || "Servicio",
-        })),
+        ...SERVICIOS_PUBLICOS,
       ];
 
       const mapaBase = {};
@@ -148,13 +203,18 @@ export default function Testimonials() {
         mapaBase[target.uid] = { reviews: [] };
       }
 
-      for (const item of comentarios) {
-        const uid =
-          item.tipo_objetivo === "profesional"
-            ? construirClaveObjetivo("profesional", item.profesional)
-            : construirClaveObjetivo("servicio", item.servicio);
+      for (const item of comentarios || []) {
+        let uid = "";
 
-        if (!mapaBase[uid]) continue;
+        if (item.tipo_objetivo === "profesional") {
+          uid = construirClaveObjetivo("profesional", item.profesional);
+        } else if (item.objetivo_publico) {
+          uid = construirClaveServicioPublico(item.objetivo_publico);
+        } else if (item.servicio) {
+          uid = construirClaveObjetivo("servicio", item.servicio);
+        }
+
+        if (!uid || !mapaBase[uid]) continue;
 
         mapaBase[uid].reviews.push({
           id: item.id,
@@ -243,7 +303,9 @@ export default function Testimonials() {
           targetName: target.name,
           targetTag: target.tag,
           targetPhoto:
-            review.targetPhoto || target.photo || obtenerFotoFallback(target.name),
+            review.targetPhoto ||
+            target.photo ||
+            obtenerFotoFallback(target.name, target.tipo_objetivo),
           ...review,
         }));
       })
@@ -270,7 +332,9 @@ export default function Testimonials() {
 
       if (selectedTarget.tipo_objetivo === "profesional") {
         payload.profesional = selectedTarget.backendId;
-      } else {
+      } else if (selectedTarget.objetivo_publico) {
+        payload.objetivo_publico = selectedTarget.objetivo_publico;
+      } else if (selectedTarget.backendId) {
         payload.servicio = selectedTarget.backendId;
       }
 
@@ -314,7 +378,7 @@ export default function Testimonials() {
           </h2>
 
           <p className="mt-2 max-w-2xl text-white/70">
-            Califica a un médico o servicio, escribe tu comentario.
+            Califica al Dr. Puig, al Dr. Buganza o a un área general de servicio.
           </p>
         </div>
 
@@ -332,17 +396,17 @@ export default function Testimonials() {
                   <RatingStars value={globalStats.avg} readOnly size="lg" />
                   <p className="mt-1 text-xs text-white/60">
                     {distTotal
-                      ? `${distTotal} reseña${distTotal === 1 ? "" : "s"} aprobada${distTotal === 1 ? "" : "s"
-                      }`
+                      ? `${distTotal} reseña${distTotal === 1 ? "" : "s"} aprobada${distTotal === 1 ? "" : "s"}`
                       : "Aún no hay reseñas"}
                   </p>
                 </div>
               </div>
 
               <div className="mt-5 flex flex-wrap gap-2">
-                <Pill>Doctores y servicios</Pill>
-                <Pill>Moderación administrativa</Pill>
-                <Pill>Publicación automática al aprobar</Pill>
+                <Pill>Dr. Puig</Pill>
+                <Pill>Dr. Buganza</Pill>
+                <Pill>Rehabilitación</Pill>
+                <Pill>Acondicionamiento</Pill>
               </div>
             </div>
           </div>
@@ -355,9 +419,7 @@ export default function Testimonials() {
                 </p>
 
                 <p className="text-xs text-white/60">
-                  {distTotal
-                    ? "Basado en reseñas"
-                    : "Sin reseñas aún"}
+                  {distTotal ? "Basado en reseñas" : "Sin reseñas aún"}
                 </p>
               </div>
 
@@ -391,13 +453,13 @@ export default function Testimonials() {
                     onChange={(e) => setSelectedId(e.target.value)}
                     disabled={loading || !targets.length}
                     className="w-full appearance-none rounded-xl border-0 bg-black/30 py-3 pl-3 pr-10 text-sm text-white ring-1 ring-inset ring-white/10 focus:outline-none focus:ring-2 focus:ring-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-60"
-                    aria-label="Selecciona médico o servicio"
+                    aria-label="Selecciona doctor o servicio"
                   >
                     {!targets.length ? (
                       <option value="">
                         {loading
                           ? "Cargando opciones..."
-                          : "No hay doctores o servicios disponibles"}
+                          : "No hay opciones disponibles"}
                       </option>
                     ) : (
                       targets.map((item) => (
@@ -484,7 +546,7 @@ export default function Testimonials() {
         <div className="mt-10 flex items-end justify-between gap-3">
           <div>
             <h4 className="text-base font-semibold text-white">
-              Calificaciones por médico/servicio
+              Calificaciones por doctor o área
             </h4>
             <p className="mt-1 text-sm text-white/70">
               Promedio, cantidad de reseñas aprobadas y satisfacción.
@@ -499,7 +561,7 @@ export default function Testimonials() {
         ) : ranked.length === 0 ? (
           <div className="mt-5 rounded-2xl border border-dashed border-white/10 bg-white/5 p-8 text-center">
             <p className="text-white/70">
-              No hay doctores o servicios disponibles para calificar.
+              No hay opciones disponibles para calificar.
             </p>
           </div>
         ) : (
@@ -512,12 +574,12 @@ export default function Testimonials() {
                 <div className="flex items-center gap-4">
                   <div className="relative h-14 w-14 overflow-hidden rounded-xl bg-black/30 ring-1 ring-white/10">
                     <img
-                      src={item.photo || "/logo.png"}
+                      src={item.photo || obtenerFotoFallback(item.name, item.tipo_objetivo)}
                       alt={item.name}
                       className="h-full w-full object-cover"
                       loading="lazy"
                       onError={(e) => {
-                        e.currentTarget.src = "/logo.png";
+                        e.currentTarget.src = obtenerFotoFallback(item.name, item.tipo_objetivo);
                       }}
                     />
                   </div>
@@ -603,11 +665,20 @@ export default function Testimonials() {
                   <div className="flex items-start gap-4">
                     <div className="h-12 w-12 overflow-hidden rounded-xl bg-black/30 ring-1 ring-white/10">
                       <img
-                        src={review.targetPhoto || "/logo.png"}
+                        src={
+                          review.targetPhoto ||
+                          obtenerFotoFallback(
+                            review.targetName,
+                            review.targetTag === "Servicio" ? "servicio" : "profesional"
+                          )
+                        }
                         alt={review.targetName}
                         className="h-full w-full object-cover"
                         onError={(e) => {
-                          e.currentTarget.src = "/logo.png";
+                          e.currentTarget.src = obtenerFotoFallback(
+                            review.targetName,
+                            review.targetTag === "Servicio" ? "servicio" : "profesional"
+                          );
                         }}
                       />
                     </div>

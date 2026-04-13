@@ -12,7 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 function durationToMinutes(durationStr) {
   if (!durationStr) return 60;
@@ -1489,8 +1489,8 @@ export function ReservationModal({
                             onClick={() => removePaymentLine(idx)}
                             disabled={Boolean(line?.id)}
                             className={`h-10 w-10 rounded-md border flex items-center justify-center ${line?.id
-                                ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
-                                : "border-slate-200 bg-white hover:bg-slate-50"
+                              ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                              : "border-slate-200 bg-white hover:bg-slate-50"
                               }`}
                             title={line?.id ? "Este abono ya fue registrado; solo se puede editar" : "Quitar"}
                           >

@@ -14,7 +14,7 @@ import {
     Palette,
 } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 function normalize(str) {
     return String(str || "").trim();

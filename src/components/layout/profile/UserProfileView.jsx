@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Eye, EyeOff, Upload, X } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 function normalizarColorHex(valor, fallback = "#06b6d4") {
     const v = String(valor || "").trim();

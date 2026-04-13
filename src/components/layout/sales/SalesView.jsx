@@ -41,7 +41,7 @@ import {
 } from "./SalesUiParts";
 import { DeletePaymentModal, PaymentDetailModal } from "./SalesModals";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 export function SalesView() {
   const sidebarDefaults = readSalesSidebarFilters();

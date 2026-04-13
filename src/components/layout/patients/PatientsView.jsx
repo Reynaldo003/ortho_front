@@ -32,8 +32,7 @@ import {
   estadoTratamientoLabel,
 } from "./PatientUtils";
 
-
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 async function openProtectedBinary(url, { filename = "documento.pdf", download = false } = {}) {
   const token = localStorage.getItem("auth.access");

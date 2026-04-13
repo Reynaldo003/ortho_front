@@ -1,7 +1,7 @@
 // src/components/reservations/PaymentModal.jsx
 import { useMemo, useState } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 function normalizarMetodoPago(metodo) {
     if (!metodo) return "efectivo";

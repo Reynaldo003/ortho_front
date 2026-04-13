@@ -1,3 +1,4 @@
+//proyecto ortho clinic
 // /componentes/reservations/ReservationModal.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -13,7 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 function durationToMinutes(durationStr) {
   if (!durationStr) return 60;

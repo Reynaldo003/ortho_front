@@ -3,10 +3,7 @@ import { createPortal } from "react-dom";
 import { Plus, Search, Package, AlertTriangle, Pill } from "lucide-react";
 import { SupplyForm } from "./SupplyForm";
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE ||
-  import.meta.env.VITE_API_URL ||
-  "";
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 function getAuthToken() {
   // ✅ prioridad al esquema que usa tu login actual

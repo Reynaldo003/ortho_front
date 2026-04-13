@@ -502,7 +502,9 @@ export function AgendaView({
 
   const canSeeAll =
     role === "admin" ||
+    role === "doctor" ||
     role === "recepcion" ||
+    role === "fisioterapeuta" ||
     role === "recepcionista";
 
   const [now, setNow] = useState(() => new Date());

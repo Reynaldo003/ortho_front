@@ -1,7 +1,8 @@
+//src/components/layout/comments/CommentsModerationView.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Star, Check, X, MessageSquareText } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 function ModalShell({ title, children, onClose, actions }) {
     return (
@@ -156,8 +157,33 @@ export function CommentsModerationView() {
                             <article key={it.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                     <div>
-                                        <p className="text-sm font-semibold text-slate-900">{it.nombre_completo}</p>
+                                        <div>
+                                            <p className="text-sm font-semibold text-slate-900">{it.nombre_completo}</p>
 
+                                            <p className="mt-1 text-xs text-cyan-700">
+                                                {(it.objetivo_tag || "Objetivo")} · {it.objetivo_nombre || "Sin objetivo"}
+                                            </p>
+
+                                            {it.objetivo_subtitulo ? (
+                                                <p className="mt-1 text-[11px] text-slate-500">{it.objetivo_subtitulo}</p>
+                                            ) : null}
+
+                                            <div className="mt-2 flex items-center gap-1">
+                                                {Array.from({ length: 5 }).map((_, idx) => {
+                                                    const filled = idx < Number(it.calificacion || 0);
+                                                    return (
+                                                        <Star
+                                                            key={idx}
+                                                            className="h-4 w-4 text-amber-400"
+                                                            fill={filled ? "currentColor" : "none"}
+                                                        />
+                                                    );
+                                                })}
+                                                <span className="ml-2 text-xs text-slate-500">
+                                                    {Number(it.calificacion || 0)} / 5
+                                                </span>
+                                            </div>
+                                        </div>
                                         <div className="mt-1 flex items-center gap-1">
                                             {Array.from({ length: 5 }).map((_, idx) => {
                                                 const filled = idx < Number(it.calificacion || 0);

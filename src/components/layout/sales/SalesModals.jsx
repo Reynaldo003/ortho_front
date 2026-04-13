@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { money } from "./salesUtils";
 import { Button } from "./SalesUiParts";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
 export function DeletePaymentModal({ open, title = "Eliminar registro", onClose, onConfirm, hint }) {
     const [text, setText] = useState("");

@@ -1,4 +1,3 @@
-// src/presentacion/pages/AgendaFisioterapia.jsx
 import { Link, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
@@ -13,12 +12,13 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-//const RAW_API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
-//const API_ROOT = /\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`;
-const RAW_API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const RAW_API_BASE = "https://ortho-clinic-cordoba.cloud";
 const API_ROOT = RAW_API_BASE
-  ? (/\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`)
+  ? /\/api$/i.test(RAW_API_BASE)
+    ? RAW_API_BASE
+    : `${RAW_API_BASE}/api`
   : "/api";
+
 const FERNANDO_NAME = "Lic. José Fernando Porras Pulido";
 
 function buildApiUrl(path) {
@@ -37,6 +37,15 @@ function pad2(n) {
 
 function formatDateISO(d) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function getTodayISO() {
+  return formatDateISO(new Date());
+}
+
+function getCurrentMinutes() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
 }
 
 function formatDatePretty(iso) {
@@ -98,7 +107,11 @@ function normalizeText(value = "") {
 }
 
 function timeToMinutes(value) {
-  const [hours, minutes] = String(value || "").slice(0, 5).split(":").map(Number);
+  const [hours, minutes] = String(value || "")
+    .slice(0, 5)
+    .split(":")
+    .map(Number);
+
   return hours * 60 + minutes;
 }
 
@@ -165,9 +178,14 @@ export default function AgendaFisioterapia() {
         ? "Rehabilitación, terapia manual, readaptación, electroterapia y recuperación funcional."
         : "Agenda general de fisioterapia.";
 
-  const expectedAgendaTipo = tipo === "adulto-mayor" ? "acondicionamiento" : "terapia";
+  const expectedAgendaTipo =
+    tipo === "adulto-mayor" ? "acondicionamiento" : "terapia";
+
   const dateOptions = useMemo(() => buildNextDays(14), []);
-  const allSlots = useMemo(() => buildSlots({ startHour: 8, endHour: 20, stepMin: 30 }), []);
+  const allSlots = useMemo(
+    () => buildSlots({ startHour: 8, endHour: 20, stepMin: 30 }),
+    []
+  );
 
   const [services, setServices] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(true);
@@ -181,6 +199,15 @@ export default function AgendaFisioterapia() {
   const [error, setError] = useState(null);
   const [busyRanges, setBusyRanges] = useState([]);
   const [loadingAgenda, setLoadingAgenda] = useState(false);
+  const [currentMinutes, setCurrentMinutes] = useState(getCurrentMinutes());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentMinutes(getCurrentMinutes());
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -201,7 +228,9 @@ export default function AgendaFisioterapia() {
             minutes: durationToMinutes(service?.duracion),
           }))
           .filter((service) => {
-            const text = normalizeText(`${service?.nombre || ""} ${service?.descripcion || ""}`);
+            const text = normalizeText(
+              `${service?.nombre || ""} ${service?.descripcion || ""}`
+            );
 
             if (expectedAgendaTipo === "acondicionamiento") {
               return (
@@ -219,10 +248,13 @@ export default function AgendaFisioterapia() {
             );
           });
 
-        const finalList = filtered.length > 0 ? filtered : all.map((service) => ({
-          ...service,
-          minutes: durationToMinutes(service?.duracion),
-        }));
+        const finalList =
+          filtered.length > 0
+            ? filtered
+            : all.map((service) => ({
+              ...service,
+              minutes: durationToMinutes(service?.duracion),
+            }));
 
         setServices(finalList);
       } catch (err) {
@@ -293,6 +325,7 @@ export default function AgendaFisioterapia() {
 
   const availableSlots = useMemo(() => {
     const minutes = selectedService?.minutes || 60;
+    const isToday = dateISO === getTodayISO();
 
     return allSlots.filter((slot) => {
       const slotStart = timeToMinutes(slot);
@@ -302,13 +335,17 @@ export default function AgendaFisioterapia() {
         return false;
       }
 
+      if (isToday && slotStart <= currentMinutes) {
+        return false;
+      }
+
       return !busyRanges.some((item) => {
         const busyStart = timeToMinutes(item?.hora_inicio);
         const busyEnd = timeToMinutes(item?.hora_termina);
         return overlaps(slotStart, slotEnd, busyStart, busyEnd);
       });
     });
-  }, [allSlots, selectedService, busyRanges]);
+  }, [allSlots, selectedService, busyRanges, dateISO, currentMinutes]);
 
   useEffect(() => {
     if (!availableSlots.length) {
@@ -596,7 +633,9 @@ export default function AgendaFisioterapia() {
                 <ol className="mt-2 space-y-2 text-sm text-slate-300">
                   <li>1) Selecciona servicio, fecha y horario.</li>
                   <li>2) Escribe tu nombre y teléfono.</li>
-                  <li>3) Pulsa <span className="font-semibold text-white">Solicitar cita</span>.</li>
+                  <li>
+                    3) Pulsa <span className="font-semibold text-white">Solicitar cita</span>.
+                  </li>
                 </ol>
               </div>
             </aside>

@@ -1,11 +1,11 @@
-// src/presentacion/components/DailyCalendar.jsx
 import { useEffect, useMemo, useState } from "react";
 
-//const RAW_API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
-//const API_ROOT = /\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`;
-const RAW_API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const RAW_API_BASE = "https://ortho-clinic-cordoba.cloud";
+
 const API_ROOT = RAW_API_BASE
-  ? (/\/api$/i.test(RAW_API_BASE) ? RAW_API_BASE : `${RAW_API_BASE}/api`)
+  ? /\/api$/i.test(RAW_API_BASE)
+    ? RAW_API_BASE
+    : `${RAW_API_BASE}/api`
   : "/api";
 
 function buildApiUrl(path) {
@@ -18,7 +18,13 @@ function pad2(value) {
 }
 
 function formatDateISO(date) {
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
+    date.getDate()
+  )}`;
+}
+
+function getTodayISO() {
+  return formatDateISO(new Date());
 }
 
 function formatDateLabel(isoDate) {
@@ -65,8 +71,17 @@ function buildSlots() {
 }
 
 function timeToMinutes(value) {
-  const [hours, minutes] = String(value || "").slice(0, 5).split(":").map(Number);
+  const [hours, minutes] = String(value || "")
+    .slice(0, 5)
+    .split(":")
+    .map(Number);
+
   return hours * 60 + minutes;
+}
+
+function getCurrentMinutes() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
 }
 
 function overlaps(startA, endA, startB, endB) {
@@ -104,6 +119,7 @@ export default function DailyCalendar({ person, selectedService, onPick }) {
   const [busyRanges, setBusyRanges] = useState([]);
   const [loading, setLoading] = useState(false);
   const [calendarError, setCalendarError] = useState("");
+  const [currentMinutes, setCurrentMinutes] = useState(getCurrentMinutes());
 
   const durationMinutes = useMemo(() => {
     return Number(selectedService?.minutes || 60);
@@ -112,6 +128,14 @@ export default function DailyCalendar({ person, selectedService, onPick }) {
   const agendaTipo = useMemo(() => {
     return selectedService?.agenda_tipo || "general";
   }, [selectedService]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentMinutes(getCurrentMinutes());
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!selectedDate || !person?.name) return;
@@ -130,7 +154,9 @@ export default function DailyCalendar({ person, selectedService, onPick }) {
           profesional_slug: person?.slug || "",
         });
 
-        const data = await fetchJson(buildApiUrl(`public/agenda/?${params.toString()}`));
+        const data = await fetchJson(
+          buildApiUrl(`public/agenda/?${params.toString()}`)
+        );
 
         if (!active) return;
         setBusyRanges(Array.isArray(data) ? data : []);
@@ -153,11 +179,17 @@ export default function DailyCalendar({ person, selectedService, onPick }) {
   }, [selectedDate, agendaTipo, person]);
 
   const availableSlots = useMemo(() => {
+    const isToday = selectedDate === getTodayISO();
+
     return slots.filter((slot) => {
       const slotStart = timeToMinutes(slot);
       const slotEnd = slotStart + durationMinutes;
 
       if (slotEnd > 20 * 60) {
+        return false;
+      }
+
+      if (isToday && slotStart <= currentMinutes) {
         return false;
       }
 
@@ -169,7 +201,7 @@ export default function DailyCalendar({ person, selectedService, onPick }) {
 
       return !isBusy;
     });
-  }, [slots, busyRanges, durationMinutes]);
+  }, [slots, busyRanges, durationMinutes, selectedDate, currentMinutes]);
 
   useEffect(() => {
     if (!availableSlots.length) {
@@ -228,7 +260,9 @@ export default function DailyCalendar({ person, selectedService, onPick }) {
           ) : calendarError ? (
             <p className="text-sm text-red-600">{calendarError}</p>
           ) : availableSlots.length === 0 ? (
-            <p className="text-sm text-slate-500">No hay horarios disponibles para ese día.</p>
+            <p className="text-sm text-slate-500">
+              No hay horarios disponibles para ese día.
+            </p>
           ) : (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
               {availableSlots.map((time) => {

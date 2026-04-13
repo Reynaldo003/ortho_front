@@ -489,10 +489,21 @@ export function AgendaView({
 }) {
   const isMobile = useMediaQuery("(max-width: 768px)");
 
-  const isProfessional =
-    role === "fisioterapeuta" || role === "nutriologo" || role === "dentista";
+  const roleNormalizado = String(role || "").trim().toLowerCase();
 
-  const canSeeAll = role === "admin" || role === "recepcion";
+  const isProfessional =
+    roleNormalizado === "fisioterapeuta" ||
+    roleNormalizado === "aux_fisioterapia" ||
+    roleNormalizado === "auxiliar_fisioterapia" ||
+    roleNormalizado === "subfisioterapeuta" ||
+    roleNormalizado === "sub_fisioterapeuta";
+
+  const canSeeAll =
+    roleNormalizado === "doctor" ||
+    roleNormalizado === "admin" ||
+    roleNormalizado === "recepcion" ||
+    roleNormalizado === "recepcionista" ||
+    roleNormalizado === "fisioterapeuta";
 
   const [viewMode, setViewMode] = useState("week");
   const [displayMode, setDisplayMode] = useState("calendar");
