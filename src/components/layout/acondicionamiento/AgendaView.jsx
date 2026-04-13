@@ -181,31 +181,31 @@ function getAppointmentPalette(appt, professionalsMap) {
     };
   }
 
-  function normalizeStaffRole(value) {
-    const raw = String(value || "").trim().toLowerCase();
-
-    if (
-      raw === "aux_fisioterapia" ||
-      raw === "auxiliar_fisioterapia" ||
-      raw === "subfisioterapeuta" ||
-      raw === "sub_fisioterapeuta"
-    ) {
-      return "aux_fisioterapia";
-    }
-
-    if (raw === "recepcion") return "recepcionista";
-    if (raw === "admin") return "doctor";
-
-    return raw;
-  }
-
-  function getProfessionalRole(item) {
-    return normalizeStaffRole(item?.rol || item?.role || item?.rol_out || "");
-  }
-
   const prof = professionalsMap.get(Number(appt.professionalId));
   const colorHex = prof?.color_agenda || "#06b6d4";
   return buildProfessionalPalette(colorHex);
+}
+
+function normalizeStaffRole(value) {
+  const raw = String(value || "").trim().toLowerCase();
+
+  if (
+    raw === "aux_fisioterapia" ||
+    raw === "auxiliar_fisioterapia" ||
+    raw === "subfisioterapeuta" ||
+    raw === "sub_fisioterapeuta"
+  ) {
+    return "aux_fisioterapia";
+  }
+
+  if (raw === "recepcion") return "recepcionista";
+  if (raw === "admin") return "doctor";
+
+  return raw;
+}
+
+function getProfessionalRole(item) {
+  return normalizeStaffRole(item?.rol || item?.role || item?.rol_out || "");
 }
 
 function HoverCard({ open, anchorRect, children }) {
@@ -643,7 +643,7 @@ export function AgendaView({
     isAuxPhysio,
     myUserId,
     isLeadPhysio,
-    auxProfessionals,
+    managedProfessionals,
     canSeeAll,
   ]);
 

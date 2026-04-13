@@ -620,7 +620,7 @@ export function AgendaView({
     isAuxPhysio,
     myUserId,
     isLeadPhysio,
-    auxProfessionals,
+    managedProfessionals,
   ]);
 
   const activeAppt = useMemo(
