@@ -8,12 +8,12 @@ import cvJose from "../assets/cvs/CV FISIO JOSE FERNANDO.pdf";
 export const STAFF = [
   {
     id: "dr-hernandez",
-    slug: "dr-hernandez",
+    slug: "dr-martin-buganza-tepole",
     role: "Médico Ortopedista",
-    name: "Dr. Martín Buganza-Tepole",
-    // ✅ Vite/public: NO uses /public ni /Public
+    name: "Dr. Martín Buganza Tepole",
+    seoName: "Dr. Martín Buganza Tepole",
     photo: "/MartinBuganza.png",
-    location: "Córdoba, Ver.",
+    location: "Córdoba, Veracruz",
     years: 19,
     rating: 4.9,
     badges: [
@@ -22,7 +22,9 @@ export const STAFF = [
       "Alta especialidad",
       "Cedula Profesional: 06062334",
     ],
-    bio: "Traumatología y Ortopedia con alta especialidad en cirugía de mano. Diagnóstico claro, tratamiento personalizado y seguimiento cercano.",
+    bio: "Traumatología y ortopedia con alta especialidad en cirugía de mano. Diagnóstico claro, tratamiento personalizado y seguimiento cercano.",
+    seoDescription:
+      "Dr. Martín Buganza Tepole, traumatólogo y ortopedista en Córdoba, Veracruz. Conoce su trayectoria, servicios, áreas de especialidad y enfoque de atención en Ortho Clinic.",
     services: [
       "Consulta de primera vez",
       "Seguimiento",
@@ -40,7 +42,6 @@ export const STAFF = [
       education:
         "Médico Cirujano (Universidad La Salle). Especialidad en Traumatología y Ortopedia (UNAM) – Instituto Nacional de Rehabilitación. Alta especialidad en Cirugía de Mano.",
 
-      // ✅ Lo agrego como lista porque lo pediste en el texto
       experience: [
         "Hospital Covadonga — 8 años",
         "ISSSTE — 10 años",
@@ -60,7 +61,6 @@ export const STAFF = [
       research:
         "Actualización médica continua e innovación en tratamientos ortopédicos. Publicación en Arthroscopy (2014) sobre tratamiento comparativo de iliopsoas para snapping hip.",
 
-      // ✅ Publicación incluida tal cual (formato limpio)
       publications: [
         "Central Compartment Release Versus Lesser Trochanter Release of the Iliopsoas Tendon for the Treatment of Internal Snapping Hip: A Comparative Study; Victor M. Ilizaliturri Jr., M.D., Martín Buganza-Tepole, M.D. Arthroscopy: The Journal of Arthroscopic and Related Surgery, Vol 30, No 7 (July), 2014: pp 790–795.",
       ],
@@ -74,7 +74,7 @@ export const STAFF = [
       ],
 
       philosophy:
-        "“La medicina debe ser precisa, humana y transparente. Mi prioridad es ofrecer diagnósticos claros y tratamientos personalizados que permitan al paciente recuperar su movilidad y calidad de vida. Acompaño cada proceso de forma cercana, desde la primera consulta hasta la rehabilitación completa.”",
+        "La medicina debe ser precisa, humana y transparente. Mi prioridad es ofrecer diagnósticos claros y tratamientos personalizados que permitan al paciente recuperar su movilidad y calidad de vida. Acompaño cada proceso de forma cercana, desde la primera consulta hasta la rehabilitación completa.",
 
       languages: "Español (nativo).",
 
@@ -92,15 +92,14 @@ export const STAFF = [
       ],
     },
   },
-
   {
     id: "dr-puig",
-    slug: "dr-puig",
+    slug: "dr-miguel-puig-zentella",
     role: "Médico Ortopedista",
-    name: "Dr. Miguel Puig",
-    // ✅ Vite/public: NO uses /Public
+    name: "Dr. Miguel Puig Zentella",
+    seoName: "Dr. Miguel Puig Zentella",
     photo: "/MiguelPuig.png",
-    location: "Cordoba, Ver.",
+    location: "Córdoba, Veracruz",
     years: 16,
     rating: 5.0,
     badges: [
@@ -109,7 +108,9 @@ export const STAFF = [
       "Alta especialidad",
       "Cedula Profesional: 09941258",
     ],
-    bio: "Traumatología y Ortopedia con alta especialidad en cirugía de mano. Atención basada en evidencia y enfoque funcional.",
+    bio: "Traumatología y ortopedia con alta especialidad en cirugía de mano. Atención basada en evidencia y enfoque funcional.",
+    seoDescription:
+      "Dr. Miguel Puig Zentella, traumatólogo y ortopedista en Córdoba, Veracruz. Conoce su trayectoria, servicios, áreas de especialidad y enfoque de atención en Ortho Clinic.",
     services: ["Consulta", "Seguimiento", "Valoración especializada"],
     videoUrl: "https://www.youtube.com/embed/-nuHonyEMvU",
 
@@ -126,7 +127,7 @@ export const STAFF = [
       experience: [
         "Hospital Covadonga — 1 año",
         "IMSS — 5 años",
-        "OCC — 10 años (trabajando en conjunto con el Dr. Martín Buganza-Tepole)",
+        "OCC — 10 años (trabajando en conjunto con el Dr. Martín Buganza Tepole)",
       ],
 
       specialties: [
@@ -140,7 +141,7 @@ export const STAFF = [
         "Atención ortopédica basada en evidencia, orientada a la funcionalidad. Comunicación clara, manejo responsable del dolor y seguimiento cercano durante todo el proceso.",
 
       research:
-        "Investigación y formación continua (espacio listo para integrar investigaciones, cursos y certificaciones conforme se documenten).",
+        "Investigación y formación continua en ortopedia, cirugía de mano y tratamiento funcional de lesiones musculoesqueléticas.",
 
       patientTypes: [
         "Deportistas con lesiones articulares, musculares o traumáticas.",
@@ -151,7 +152,7 @@ export const STAFF = [
       ],
 
       philosophy:
-        "“La atención traumatológica debe ser precisa, oportuna y orientada a la funcionalidad. Mi enfoque se basa en realizar una valoración integral de cada lesión para ofrecer tratamientos adecuados que permitan una recuperación segura y eficaz. Priorizo la comunicación clara con el paciente, el manejo responsable del dolor y un seguimiento cercano durante todo el proceso, con el objetivo de restablecer la movilidad y la calidad de vida en el menor tiempo posible.”",
+        "La atención traumatológica debe ser precisa, oportuna y orientada a la funcionalidad. Mi enfoque se basa en realizar una valoración integral de cada lesión para ofrecer tratamientos adecuados que permitan una recuperación segura y eficaz. Priorizo la comunicación clara con el paciente, el manejo responsable del dolor y un seguimiento cercano durante todo el proceso, con el objetivo de restablecer la movilidad y la calidad de vida.",
 
       languages: "Español (nativo).",
 
@@ -169,7 +170,6 @@ export const STAFF = [
       ],
     },
   },
-
   // ---------------------------
   // Fisioterapia (si los sigues usando en la app)
   // ---------------------------

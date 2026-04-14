@@ -8,7 +8,7 @@ export default function Hero() {
   useEffect(() => {
     const brandTimer = setTimeout(() => {
       setShowBrandStatic(true);
-    }, 2200);
+    }, 1800);
 
     const titleTimer = setTimeout(() => {
       setShowTitleStatic(true);
@@ -23,71 +23,83 @@ export default function Hero() {
   return (
     <section
       id="inicio"
-      className="relative overflow-hidden bg-cover bg-center min-h-[560px] md:min-h-[640px] uw:min-h-[720px]"
+      className="relative overflow-hidden bg-cover bg-center min-h-[560px] sm:min-h-[620px] md:min-h-[700px] uw:min-h-[760px]"
       style={{
         backgroundImage: `url(${heroXray})`,
-        backgroundPosition: "60% 40%",
+        backgroundPosition: "62% 40%",
       }}
     >
+      {/* Capa oscura para contraste */}
+      <div className="absolute inset-0 bg-slate-950/45" />
+
+      {/* Gradientes para mejorar lectura */}
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(2,6,23,0.88)_0%,rgba(2,6,23,0.58)_36%,rgba(2,6,23,0.18)_58%,rgba(2,6,23,0.34)_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_28%,rgba(15,118,190,0.18),transparent_34%)]" />
+
       <div
-        className="relative z-10 container max-w-9xl uw:max-w-10xl
-                pt-28 md:pt-36 uw:pt-44
-                pb-12 md:pb-16
-                safe-px"
+        className="relative z-10 container max-w-9xl uw:max-w-10xl safe-px
+                   pt-28 sm:pt-32 md:pt-36 uw:pt-44
+                   pb-14 sm:pb-16 md:pb-20"
       >
-        <div className="grid lg:grid-cols-2 gap-10 items-center">
-          <div>
-            <h1 className="mt-16 font-extrabold tracking-tight text-fluid-5xl text-[#2FD0D8] min-h-[72px] md:min-h-[88px]">
+        <div className="grid items-center gap-8 lg:grid-cols-12">
+          <div className="lg:col-span-7 xl:col-span-6">
+            {/* Marca animada */}
+            <div className="min-h-[40px] sm:min-h-[48px]">
               {showBrandStatic ? (
-                <span className="inline-block align-bottom pr-3">
+                <p className="inline-block align-bottom text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-[#2FD0D8]">
                   ORTHO CLINIC
-                </span>
+                </p>
               ) : (
-                <span
+                <p
                   className="
                     inline-block align-bottom
                     overflow-hidden whitespace-nowrap
                     border-r-4 border-r-[#2FD0D8]/80 pr-3
+                    text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-[#2FD0D8]
                     animate-heroBrand animate-blinkSoft
                     [will-change:clip-path]
                   "
                 >
                   ORTHO CLINIC
-                </span>
+                </p>
               )}
-            </h1>
+            </div>
 
-            <h2 className="mt-6 md:mt-8 uw:mt-10 font-extrabold tracking-tight text-fluid-5xl text-white min-h-[120px] md:min-h-[150px]">
+            {/* H1 principal */}
+            <div className="mt-5 sm:mt-6 md:mt-8 min-h-[150px] sm:min-h-[190px] md:min-h-[220px]">
               {showTitleStatic ? (
-                <span className="inline-block align-bottom pr-4">
-                  Traumatología y ortopedia, rehabilitación y terapia física
-                </span>
+                <h1 className="max-w-4xl text-[2.25rem] leading-[1.02] sm:text-[3rem] md:text-[4rem] lg:text-[4.5rem] font-extrabold tracking-tight text-white">
+                  Traumatología, ortopedia y rehabilitación física en Córdoba, Veracruz
+                </h1>
               ) : (
-                <span
+                <h1
                   className="
-                    inline-block align-bottom
+                    inline-block max-w-4xl
                     overflow-hidden
                     border-r-4 border-r-white/80 pr-4
+                    text-[2.25rem] leading-[1.02] sm:text-[3rem] md:text-[4rem] lg:text-[4.5rem]
+                    font-extrabold tracking-tight text-white
                     animate-heroType animate-blinkSoft
                     [will-change:clip-path]
                   "
                 >
-                  Traumatología y ortopedia, rehabilitación y terapia física
-                </span>
+                  Traumatología, ortopedia y rehabilitación física en Córdoba, Veracruz
+                </h1>
               )}
-            </h2>
+            </div>
 
-            <p className="mt-4 text-base md:text-lg text-slate-100 max-w-prose animate-fadeUp">
-              Médicos especialistas y licenciados en fisioterapia listos para atenderte,
-              agenda tu cita con el profesional adecuado
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-100 sm:text-base md:text-lg animate-fadeUp">
+              Atención con médicos especialistas y profesionales de fisioterapia
+              para valoración, seguimiento, recuperación funcional y tratamiento
+              personalizado.
             </p>
 
-            <div className="mt-6 flex flex-wrap gap-3">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <a
                 href="#equipo"
                 className="
                   group relative inline-flex items-center justify-center gap-2
-                  px-9 py-3
+                  px-7 sm:px-8 py-3
                   rounded-2xl hover:rounded-3xl
                   border border-white/15 ring-1 ring-white/10
                   bg-slate-950/60 backdrop-blur
@@ -178,10 +190,35 @@ export default function Hero() {
                   aria-hidden="true"
                 />
               </a>
+
+              <a
+                href="#servicios-home"
+                className="
+                  inline-flex items-center justify-center
+                  rounded-2xl border border-white/15 bg-slate-950/35 px-7 py-3
+                  text-sm font-semibold text-white backdrop-blur
+                  transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/10
+                "
+              >
+                Ver servicios
+              </a>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-2 sm:gap-3 animate-fadeUp">
+              <span className="rounded-full border border-white/10 bg-slate-950/45 px-3 py-1.5 text-xs font-medium text-slate-100 backdrop-blur">
+                Traumatología y ortopedia
+              </span>
+              <span className="rounded-full border border-white/10 bg-slate-950/45 px-3 py-1.5 text-xs font-medium text-slate-100 backdrop-blur">
+                Fisioterapia y rehabilitación
+              </span>
+              <span className="rounded-full border border-white/10 bg-slate-950/45 px-3 py-1.5 text-xs font-medium text-slate-100 backdrop-blur">
+                Córdoba, Veracruz
+              </span>
             </div>
           </div>
 
-          <div className="hidden lg:block" />
+          {/* Columna vacía para conservar el look del hero */}
+          <div className="hidden lg:block lg:col-span-5 xl:col-span-6" />
         </div>
       </div>
     </section>

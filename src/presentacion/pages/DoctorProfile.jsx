@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -42,6 +42,7 @@ export default function DoctorProfile() {
             <ArrowLeft className="h-4 w-4" />
             Volver al inicio
           </Link>
+
           <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-8 text-center shadow-xl">
             <p className="text-lg font-semibold">
               No encontramos el perfil solicitado.
@@ -60,10 +61,20 @@ export default function DoctorProfile() {
 
   const years = doctor.years ?? 5;
   const rating = typeof doctor.rating === "number" ? doctor.rating : 5;
-  const location = doctor.location ?? "Córdoba, Ver.";
+  const location = doctor.location ?? "Córdoba, Veracruz";
   const badges = doctor.badges ?? [];
   const services = doctor.services ?? [];
-  const profile = doctor.profile ?? {};
+  const profile = doctor.profile ?? [];
+
+  const fullDoctorName = doctor.seoName || doctor.name;
+  const cityLabel = "Córdoba, Veracruz";
+  const specialtyLabel = isPhysio
+    ? "Fisioterapia y rehabilitación"
+    : "Traumatología y ortopedia";
+
+  const subtitle = isPhysio
+    ? `${fullDoctorName} | Fisioterapia y rehabilitación en ${cityLabel}`
+    : `${fullDoctorName} | Traumatólogo y ortopedista en ${cityLabel}`;
 
   const aboutText =
     profile.bio ??
@@ -89,15 +100,17 @@ export default function DoctorProfile() {
     ];
 
   const specialties = profile.specialties ?? defaultSpecialties;
+  const experience = profile.experience ?? [];
+  const certifications = profile.certifications ?? [];
+  const patientTypes = profile.patientTypes ?? [];
+  const publications = profile.publications ?? [];
 
-  // Stats personalizados
   const stats = {
     patientsPerYear: profile.patientsPerYear ?? 300,
     surgeriesPerYear: profile.surgeriesPerYear ?? (isPhysio ? 150 : 120),
     satisfaction: profile.satisfaction ?? 98,
   };
 
-  // Videos: primero profile.videos, si no, el videoUrl del staff, y si tampoco, fallback Rick Astley 😅
   const videosFromProfile = profile.videos ?? [];
   const baseVideos =
     videosFromProfile.length > 0
@@ -105,10 +118,8 @@ export default function DoctorProfile() {
       : doctor.videoUrl
         ? [doctor.videoUrl]
         : [];
-  const videos =
-    baseVideos.length > 0
-      ? baseVideos
-      : ["https://www.youtube.com/embed/dQw4w9WgXcQ"];
+
+  const videos = baseVideos.length > 0 ? baseVideos : [];
 
   const testimonials = profile.testimonials ?? [
     {
@@ -121,20 +132,94 @@ export default function DoctorProfile() {
     },
   ];
 
-  const roleChipLabel = isPhysio ? "Fisioterapeuta" : doctor.role || "Especialista";
+  const roleChipLabel = isPhysio
+    ? "Fisioterapeuta"
+    : doctor.role || "Especialista";
+
   const RoleIcon = isPhysio ? Activity : Stethoscope;
+
+  useEffect(() => {
+    const pageTitle = isPhysio
+      ? `${fullDoctorName} | Fisioterapia y rehabilitación en Córdoba, Veracruz | Ortho Clinic`
+      : `${fullDoctorName} | Traumatología y ortopedia en Córdoba, Veracruz | Ortho Clinic`;
+
+    const pageDescription =
+      doctor.seoDescription ||
+      (isPhysio
+        ? `${fullDoctorName}. Perfil profesional de fisioterapia y rehabilitación en Córdoba, Veracruz. Conoce trayectoria, áreas de atención, enfoque clínico y videos del especialista.`
+        : `${fullDoctorName}. Perfil profesional de traumatología y ortopedia en Córdoba, Veracruz. Conoce trayectoria, áreas de atención, enfoque clínico y videos del especialista.`);
+
+    document.title = pageTitle;
+    upsertMeta('name="description"', "name", "description", pageDescription);
+    upsertMeta("property='og:title'", "property", "og:title", pageTitle);
+    upsertMeta(
+      "property='og:description'",
+      "property",
+      "og:description",
+      pageDescription
+    );
+    upsertMeta("property='og:type'", "property", "og:type", "profile");
+    upsertMeta(
+      "property='og:url'",
+      "property",
+      "og:url",
+      getCurrentAbsoluteUrl()
+    );
+
+    if (doctor.photo) {
+      upsertMeta(
+        "property='og:image'",
+        "property",
+        "og:image",
+        buildAbsoluteUrl(doctor.photo)
+      );
+    }
+
+    upsertCanonical(getCurrentAbsoluteUrl());
+    upsertStructuredData(
+      "doctor-jsonld",
+      JSON.stringify(
+        {
+          "@context": "https://schema.org",
+          "@type": isPhysio ? "Person" : "Physician",
+          name: fullDoctorName,
+          description: pageDescription,
+          medicalSpecialty: isPhysio
+            ? "Physiotherapy"
+            : "Orthopedic",
+          worksFor: {
+            "@type": "MedicalClinic",
+            name: "Ortho Clinic Córdoba",
+            url: buildAbsoluteUrl("/"),
+          },
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: "Córdoba",
+            addressRegion: "Veracruz",
+            addressCountry: "MX",
+          },
+          image: doctor.photo ? buildAbsoluteUrl(doctor.photo) : undefined,
+          url: getCurrentAbsoluteUrl(),
+        },
+        null,
+        2
+      )
+    );
+
+    return () => {
+      removeStructuredData("doctor-jsonld");
+    };
+  }, [doctor, fullDoctorName, isPhysio]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
-      {/* Fondo degradado */}
       <div
         aria-hidden
         className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.22),transparent_60%),radial-gradient(circle_at_bottom,_rgba(37,99,235,0.32),transparent_55%)]"
       />
 
       <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-10 lg:px-6 lg:pt-14">
-        {/* Volver + badge verificado */}
-        <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link
             to="/"
             className="inline-flex items-center gap-2 text-sm font-medium text-slate-200 hover:text-white"
@@ -143,7 +228,7 @@ export default function DoctorProfile() {
             Volver a doctores
           </Link>
 
-          <span className="inline-flex items-center gap-2 rounded-full bg-slate-900/80 px-3 py-1 text-xs text-slate-200 ring-1 ring-sky-500/30">
+          <span className="inline-flex items-center gap-2 self-start rounded-full bg-slate-900/80 px-3 py-1 text-xs text-slate-200 ring-1 ring-sky-500/30 sm:self-auto">
             <ShieldCheck className="h-3.5 w-3.5 text-sky-400" />
             Perfil verificado por la clínica
           </span>
@@ -160,14 +245,14 @@ export default function DoctorProfile() {
               />
 
               <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
-                {/* Foto grande */}
                 <div className="shrink-0">
                   <div className="relative">
                     <img
                       src={doctor.photo}
-                      alt={doctor.name}
+                      alt={`${fullDoctorName}, ${isPhysio ? "fisioterapeuta" : "traumatólogo y ortopedista"} en Córdoba, Veracruz`}
                       className="h-40 w-40 rounded-3xl object-cover ring-2 ring-sky-500/80 sm:h-48 sm:w-48"
                     />
+
                     <span className="absolute -bottom-2 -right-2 inline-flex items-center gap-1 rounded-full bg-sky-500 px-2.5 py-1 text-xs font-semibold text-white shadow-lg">
                       <RoleIcon className="h-3.5 w-3.5" />
                       {roleChipLabel}
@@ -175,13 +260,19 @@ export default function DoctorProfile() {
                   </div>
                 </div>
 
-                {/* Info principal */}
                 <div className="relative flex-1 space-y-3">
                   <div>
                     <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                      {doctor.name}
+                      {fullDoctorName}
                     </h1>
-                    <p className="mt-1 text-sm text-slate-200">{doctor.role}</p>
+
+                    <p className="mt-1 text-sm text-slate-200">{subtitle}</p>
+
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                      Perfil profesional con trayectoria, áreas de atención,
+                      enfoque clínico y servicios frecuentes dentro de Ortho
+                      Clinic Córdoba.
+                    </p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-xs text-slate-200">
@@ -189,10 +280,12 @@ export default function DoctorProfile() {
                       <Clock3 className="h-3.5 w-3.5 text-sky-300" />
                       {years} años de experiencia
                     </span>
+
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-800/80 px-3 py-1 ring-1 ring-white/10">
                       <MapPin className="h-3.5 w-3.5 text-sky-300" />
                       {location}
                     </span>
+
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-800/80 px-3 py-1 ring-1 ring-white/10">
                       <Star className="h-3.5 w-3.5 text-yellow-300" />
                       {rating.toFixed(1)} / 5 · Opiniones de pacientes
@@ -215,7 +308,6 @@ export default function DoctorProfile() {
                 </div>
               </div>
 
-              {/* Resumen en cifras */}
               <div className="relative mt-6 grid gap-3 text-xs sm:grid-cols-3">
                 <StatPill
                   label="Pacientes atendidos al año"
@@ -244,6 +336,7 @@ export default function DoctorProfile() {
               <h2 className="text-lg font-semibold text-white">
                 Sobre el especialista
               </h2>
+
               <p className="mt-3 text-sm leading-relaxed text-slate-200">
                 {aboutText}
               </p>
@@ -276,6 +369,7 @@ export default function DoctorProfile() {
                   <h3 className="text-sm font-semibold text-white">
                     Formación y certificaciones
                   </h3>
+
                   <ul className="space-y-1.5 text-xs text-slate-200">
                     <li>
                       •{" "}
@@ -284,18 +378,52 @@ export default function DoctorProfile() {
                           ? "Licenciatura en Fisioterapia con enfoque en rehabilitación musculoesquelética."
                           : "Especialidad en Ortopedia y Traumatología.")}
                     </li>
-                    <li>
-                      • Actualización continua mediante cursos y congresos
-                      nacionales e internacionales.
-                    </li>
-                    <li>
-                      • Participación en programas de educación a pacientes y
-                      personal de salud.
-                    </li>
+
+                    {certifications.length > 0 ? (
+                      certifications.slice(0, 3).map((item, idx) => (
+                        <li key={idx}>• {item}</li>
+                      ))
+                    ) : (
+                      <>
+                        <li>
+                          • Actualización continua mediante cursos y congresos
+                          nacionales e internacionales.
+                        </li>
+                        <li>
+                          • Participación en programas de educación a pacientes
+                          y personal de salud.
+                        </li>
+                      </>
+                    )}
                   </ul>
                 </div>
               </div>
             </section>
+
+            {/* Trayectoria */}
+            {experience.length > 0 && (
+              <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl sm:p-7">
+                <h2 className="text-lg font-semibold text-white">
+                  Trayectoria profesional
+                </h2>
+
+                <p className="mt-1 text-xs text-slate-300">
+                  Experiencia clínica y espacios donde ha desarrollado su
+                  práctica.
+                </p>
+
+                <ul className="mt-4 grid gap-3 text-sm text-slate-200 md:grid-cols-2">
+                  {experience.map((item, idx) => (
+                    <li
+                      key={idx}
+                      className="rounded-2xl bg-slate-950/50 p-4 ring-1 ring-white/5"
+                    >
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* Áreas de especialidad */}
             <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl sm:p-7">
@@ -308,6 +436,7 @@ export default function DoctorProfile() {
                     Principales tipos de casos que atiende de forma habitual.
                   </p>
                 </div>
+
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600/15 px-2.5 py-1 text-[11px] font-medium text-emerald-200 ring-1 ring-emerald-500/40">
                   <HeartPulse className="h-3.5 w-3.5" />
                   Enfoque musculoesquelético
@@ -323,6 +452,7 @@ export default function DoctorProfile() {
                     </li>
                   ))}
                 </ul>
+
                 <ul className="space-y-2">
                   {specialties.slice(3).map((s, i) => (
                     <li key={i} className="flex items-start gap-2">
@@ -334,11 +464,12 @@ export default function DoctorProfile() {
               </div>
             </section>
 
-            {/* Enfoque de tratamiento (timeline) */}
+            {/* Proceso */}
             <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl sm:p-7">
               <h2 className="text-lg font-semibold text-white">
                 ¿Cómo trabaja el especialista?
               </h2>
+
               <p className="mt-1 text-xs text-slate-300">
                 Proceso típico de atención desde la primera valoración hasta el
                 alta.
@@ -357,7 +488,7 @@ export default function DoctorProfile() {
                   description={
                     isPhysio
                       ? "Se diseña un programa de fisioterapia con objetivos claros, ejercicios y sesiones adaptadas a tu ritmo."
-                      : "Se explican las alternativas disponibles (tratamiento conservador, fisioterapia, cirugía, etc.) y se elige la mejor opción para tu caso."
+                      : "Se explican las alternativas disponibles y se elige la mejor opción para tu caso."
                   }
                   icon={Brain}
                 />
@@ -376,51 +507,86 @@ export default function DoctorProfile() {
               </ol>
             </section>
 
-            {/* VIDEOS */}
-            <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl sm:p-7">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-white">
-                    Videos del especialista
-                  </h2>
-                  <p className="mt-1 text-xs text-slate-300">
-                    Contenido educativo y demostrativo dirigido a pacientes.
-                  </p>
-                </div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-600/15 px-2.5 py-1 text-[11px] font-medium text-red-200 ring-1 ring-red-500/40">
-                  <Youtube className="h-3.5 w-3.5" />
-                  Canal educativo
-                </span>
-              </div>
+            {/* Opiniones */}
+            {testimonials.length > 0 && (
+              <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl sm:p-7">
+                <h2 className="text-lg font-semibold text-white">
+                  Opiniones y experiencia de pacientes
+                </h2>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                {videos.map((url, i) => (
-                  <div
-                    key={i}
-                    className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/60 shadow-lg"
-                  >
-                    <div className="aspect-video">
-                      <iframe
-                        src={url}
-                        title={`Video ${i + 1} del especialista`}
-                        loading="lazy"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                        className="h-full w-full"
-                      />
-                    </div>
+                <p className="mt-1 text-xs text-slate-300">
+                  Comentarios representativos del estilo de atención del
+                  especialista.
+                </p>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  {testimonials.map((item, idx) => (
+                    <article
+                      key={idx}
+                      className="rounded-2xl bg-slate-950/55 p-5 ring-1 ring-white/5"
+                    >
+                      <Quote className="h-5 w-5 text-sky-300" />
+                      <p className="mt-3 text-sm leading-7 text-slate-200">
+                        {item.text}
+                      </p>
+                      <p className="mt-4 text-xs font-semibold text-slate-400">
+                        {item.name}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Videos */}
+            {videos.length > 0 && (
+              <section className="rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-xl sm:p-7">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">
+                      Videos del especialista
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-300">
+                      Contenido educativo y demostrativo dirigido a pacientes.
+                    </p>
                   </div>
-                ))}
-              </div>
-            </section>
+
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-600/15 px-2.5 py-1 text-[11px] font-medium text-red-200 ring-1 ring-red-500/40">
+                    <Youtube className="h-3.5 w-3.5" />
+                    Canal educativo
+                  </span>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  {videos.map((url, i) => (
+                    <div
+                      key={i}
+                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/60 shadow-lg"
+                    >
+                      <div className="aspect-video">
+                        <iframe
+                          src={url}
+                          title={`Video ${i + 1} de ${fullDoctorName}`}
+                          loading="lazy"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                          className="h-full w-full"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </section>
 
-          {/* COLUMNA DERECHA: FICHA PROFESIONAL */}
-          <aside className="space-y-4">
+          {/* COLUMNA DERECHA */}
+          <aside className="space-y-4 lg:sticky lg:top-24">
             <section className="rounded-3xl border border-white/10 bg-slate-900/90 p-5 shadow-2xl sm:p-6">
               <h2 className="text-base font-semibold text-white">
                 Ficha profesional
               </h2>
+
               <p className="mt-1 text-xs text-slate-300">
                 Resumen de la trayectoria, líneas de trabajo e intereses
                 clínicos.
@@ -454,19 +620,21 @@ export default function DoctorProfile() {
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3">
-                  <Users className="mt-0.5 h-4 w-4 text-sky-300" />
-                  <div>
-                    <p className="font-medium text-slate-100">
-                      Tipo de pacientes que atiende
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-300">
-                      Deportistas, pacientes con dolor articular crónico,
-                      personas en rehabilitación post-operatoria y adultos que
-                      desean mejorar su movilidad y calidad de vida.
-                    </p>
+                {patientTypes.length > 0 && (
+                  <div className="flex items-start gap-3">
+                    <Users className="mt-0.5 h-4 w-4 text-sky-300" />
+                    <div>
+                      <p className="font-medium text-slate-100">
+                        Tipo de pacientes que atiende
+                      </p>
+                      <ul className="mt-1 space-y-1 text-[11px] text-slate-300">
+                        {patientTypes.slice(0, 5).map((item, idx) => (
+                          <li key={idx}>• {item}</li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="flex items-start gap-3">
                   <GraduationCap className="mt-0.5 h-4 w-4 text-indigo-300" />
@@ -475,9 +643,8 @@ export default function DoctorProfile() {
                       Filosofía de atención
                     </p>
                     <p className="mt-0.5 text-[11px] text-slate-300">
-                      Explica cada paso del proceso de tratamiento y toma
-                      decisiones en conjunto con el paciente, basándose en
-                      evidencia científica actual.
+                      {profile.philosophy ??
+                        "Explica cada paso del proceso de tratamiento y toma decisiones en conjunto con el paciente, basándose en evidencia científica actual."}
                     </p>
                   </div>
                 </div>
@@ -499,6 +666,7 @@ export default function DoctorProfile() {
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                     Procedimientos / servicios frecuentes
                   </p>
+
                   <ul className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-slate-200">
                     {services.slice(0, 8).map((s, i) => (
                       <li
@@ -507,6 +675,20 @@ export default function DoctorProfile() {
                       >
                         {s}
                       </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {publications.length > 0 && (
+                <div className="mt-4 rounded-2xl bg-slate-950/70 p-3 ring-1 ring-white/5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    Publicaciones / aportes
+                  </p>
+
+                  <ul className="mt-2 space-y-2 text-[11px] leading-5 text-slate-300">
+                    {publications.slice(0, 3).map((item, idx) => (
+                      <li key={idx}>• {item}</li>
                     ))}
                   </ul>
                 </div>
@@ -529,6 +711,60 @@ export default function DoctorProfile() {
   );
 }
 
+/* Helpers de head */
+
+function upsertMeta(selector, attrName, attrValue, content) {
+  let element = document.head.querySelector(`meta[${selector}]`);
+
+  if (!element) {
+    element = document.createElement("meta");
+    element.setAttribute(attrName, attrValue);
+    document.head.appendChild(element);
+  }
+
+  element.setAttribute("content", content);
+}
+
+function upsertCanonical(href) {
+  let link = document.head.querySelector("link[rel='canonical']");
+
+  if (!link) {
+    link = document.createElement("link");
+    link.setAttribute("rel", "canonical");
+    document.head.appendChild(link);
+  }
+
+  link.setAttribute("href", href);
+}
+
+function upsertStructuredData(id, jsonText) {
+  let script = document.getElementById(id);
+
+  if (!script) {
+    script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.id = id;
+    document.head.appendChild(script);
+  }
+
+  script.textContent = jsonText;
+}
+
+function removeStructuredData(id) {
+  const script = document.getElementById(id);
+  if (script) script.remove();
+}
+
+function buildAbsoluteUrl(path = "/") {
+  if (typeof window === "undefined") return path;
+  return new URL(path, window.location.origin).toString();
+}
+
+function getCurrentAbsoluteUrl() {
+  if (typeof window === "undefined") return "/";
+  return window.location.href;
+}
+
 /* COMPONENTES AUXILIARES */
 
 function StatPill({ label, value, icon: Icon }) {
@@ -537,6 +773,7 @@ function StatPill({ label, value, icon: Icon }) {
       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-500/20">
         <Icon className="h-4 w-4 text-sky-300" />
       </div>
+
       <div className="min-w-0">
         <p className="text-xs font-semibold text-slate-100">{value}</p>
         <p className="text-[10px] text-slate-400">{label}</p>
@@ -554,6 +791,7 @@ function TimelineItem({ step, title, description, icon: Icon }) {
         </div>
         <div className="mt-1 h-full w-px flex-1 bg-slate-700/60" />
       </div>
+
       <div className="space-y-0.5">
         <div className="flex items-center gap-2">
           <Icon className="h-4 w-4 text-sky-300" />
