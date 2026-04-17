@@ -1,3 +1,4 @@
+// src/components/layout/acondicionamiento/ReservationModal.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CreditCard,
@@ -543,9 +544,10 @@ export function ReservationModal({
 
   const timeSlots = useMemo(() => {
     const slots = [];
-    for (let h = 7; h <= 21; h++) {
-      const hh = String(h).padStart(2, "0");
-      slots.push({ time: `${hh}:00`, busy: false });
+    for (let total = 7 * 60; total <= 21 * 60; total += 30) {
+      const hh = String(Math.floor(total / 60)).padStart(2, "0");
+      const mm = String(total % 60).padStart(2, "0");
+      slots.push({ time: `${hh}:${mm}`, busy: false });
     }
     return slots;
   }, []);
@@ -1274,7 +1276,7 @@ export function ReservationModal({
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">Hora inicio (por hora)</label>
+                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">Hora inicio</label>
                     <select
                       className="w-full text-sm rounded-md border border-slate-300 px-3 py-2"
                       value={form.time}
@@ -1288,7 +1290,7 @@ export function ReservationModal({
                     </select>
 
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Se permiten múltiples citas dentro de la misma hora desde el panel administrativo.
+                      Puedes elegir en punto o media hora. En la agenda la tarjeta se muestra ocupando visualmente la hora completa.
                     </p>
                   </div>
 

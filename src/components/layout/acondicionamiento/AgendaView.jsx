@@ -79,6 +79,11 @@ function toMinutes(time) {
   const mm = parseInt(String(time).slice(3, 5), 10) || 0;
   return hh * 60 + mm;
 }
+function floorToHourMinutes(totalMinutes) {
+  const n = Number(totalMinutes || 0);
+  return Math.floor(n / 60) * 60;
+}
+
 
 function addMinutesToTime(timeStr, minutesToAdd) {
   if (!timeStr) return "08:00";
@@ -915,6 +920,7 @@ export function AgendaView({
     };
 
     const touchClass = !isBlock ? "touch-none" : "";
+    const timeLabel = `${String(appt.time || "").slice(0, 5)}${appt.endTime ? ` – ${String(appt.endTime).slice(0, 5)}` : ""}`;
 
     return (
       <button
@@ -955,7 +961,7 @@ export function AgendaView({
           setHoverRect(null);
         }}
         className={[
-          "absolute text-left rounded-md border shadow-sm hover:shadow-md transition overflow-hidden px-2 py-2 text-[11px]",
+          "absolute text-left rounded-md border shadow-sm hover:shadow-md transition overflow-hidden px-2 py-1.5 text-[10px]",
           touchClass,
         ].join(" ")}
         {...(!isBlock ? listeners : {})}
@@ -963,28 +969,29 @@ export function AgendaView({
       >
         {appt.paid && !isBlock && <PaidMark />}
 
-        <div className="pl-2 min-w-0">
-          <div className="flex items-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full" style={appt.__dotStyle} />
-            <div className="font-semibold truncate">
-              {isBlock ? "Horario bloqueado" : appt.patient || "Paciente"}
+        <div className="pl-2 min-w-0 h-full flex flex-col gap-0.5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex items-start gap-1 flex-1">
+              <span className="mt-[2px] h-2.5 w-2.5 shrink-0 rounded-full" style={appt.__dotStyle} />
+              <div className="min-w-0 font-semibold text-[11px] leading-tight break-words">
+                {isBlock ? "Horario bloqueado" : appt.patient || "Paciente"}
+              </div>
+            </div>
+
+            <div className="shrink-0 rounded-md bg-white/70 px-1.5 py-[3px] text-[9px] font-semibold leading-none text-slate-700">
+              {timeLabel || "--:--"}
             </div>
           </div>
 
-          <div className="text-[10px] opacity-90 truncate mt-1">
+          <div className="text-[10px] leading-tight break-words opacity-90">
             {isBlock ? appt.motivo || "No disponible" : appt.service || "Servicio"}
           </div>
 
           {!isBlock && (
-            <div className="text-[10px] opacity-80 truncate">
+            <div className="text-[10px] leading-tight break-words opacity-80">
               {appt.professional || "Sin profesional"}
             </div>
           )}
-
-          <div className="text-[10px] opacity-80 mt-1">
-            {String(appt.time || "").slice(0, 5)}
-            {appt.endTime ? ` – ${String(appt.endTime).slice(0, 5)}` : ""}
-          </div>
         </div>
       </button>
     );
@@ -1018,12 +1025,26 @@ export function AgendaView({
     const appts = (items || [])
       .filter((a) => !isBlockItem(a))
       .map((a) => {
-        const s = clamp(toMinutes(a.time), DAY_START_MIN, DAY_END_MIN);
-        const eRaw = toMinutes(a.endTime || addMinutesToTime(a.time, 60));
-        const e = clamp(Math.max(eRaw, s + 60), DAY_START_MIN, DAY_END_MIN);
-        return { ...a, __s: s, __e: e };
+        const realStart = clamp(toMinutes(a.time), DAY_START_MIN, DAY_END_MIN);
+        const realEndRaw = toMinutes(a.endTime || addMinutesToTime(a.time, 60));
+        const realEnd = clamp(Math.max(realEndRaw, realStart + 60), DAY_START_MIN, DAY_END_MIN);
+
+        const displayStart = clamp(floorToHourMinutes(realStart), DAY_START_MIN, DAY_END_MIN);
+        const displayEnd = clamp(displayStart + 60, DAY_START_MIN, DAY_END_MIN);
+
+        return {
+          ...a,
+          __s: realStart,
+          __e: realEnd,
+          __displayStart: displayStart,
+          __displayEnd: displayEnd,
+        };
       })
-      .sort((a, b) => a.__s - b.__s || (b.__e - b.__s) - (a.__e - a.__s));
+      .sort(
+        (a, b) =>
+          a.__displayStart - b.__displayStart ||
+          (b.__displayEnd - b.__displayStart) - (a.__displayEnd - a.__displayStart)
+      );
 
     if (!appts.length) return new Map();
 
@@ -1047,10 +1068,10 @@ export function AgendaView({
     }
 
     for (const a of appts) {
-      releaseEnded(a.__s);
+      releaseEnded(a.__displayStart);
       const col = lowestFreeCol();
       usedCols.add(col);
-      active.push({ end: a.__e, col, id: a.id });
+      active.push({ end: a.__displayEnd, col, id: a.id });
       colById.set(a.id, col);
     }
 
@@ -1059,7 +1080,14 @@ export function AgendaView({
       for (let j = i + 1; j < appts.length; j++) {
         const A = appts[i];
         const B = appts[j];
-        if (overlapsMinutes(A.__s, A.__e, B.__s, B.__e)) {
+        if (
+          overlapsMinutes(
+            A.__displayStart,
+            A.__displayEnd,
+            B.__displayStart,
+            B.__displayEnd
+          )
+        ) {
           adj.get(A.id).add(B.id);
           adj.get(B.id).add(A.id);
         }
@@ -1101,8 +1129,8 @@ export function AgendaView({
       const col = colById.get(a.id) ?? 0;
       const maxCols = groupMaxCols.get(a.id) ?? 1;
 
-      const topPx = ((a.__s - DAY_START_MIN) / 60) * HOUR_ROW_HEIGHT;
-      const heightPx = ((a.__e - a.__s) / 60) * HOUR_ROW_HEIGHT;
+      const topPx = ((a.__displayStart - DAY_START_MIN) / 60) * HOUR_ROW_HEIGHT;
+      const heightPx = ((a.__displayEnd - a.__displayStart) / 60) * HOUR_ROW_HEIGHT;
 
       const widthPct = 100 / maxCols;
       const leftPct = col * widthPct;
