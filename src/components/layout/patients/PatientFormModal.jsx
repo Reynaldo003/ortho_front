@@ -7,21 +7,12 @@ import {
     getFullName,
     yesNo,
     formatDateMX,
-    formatTimeHM,
 } from "./PatientUtils";
 
 function sortSessionsDesc(list = []) {
     return [...list].sort((a, b) => {
         const ka = `${a.fecha || ""}T${a.creado || ""}`;
         const kb = `${b.fecha || ""}T${b.creado || ""}`;
-        return kb.localeCompare(ka);
-    });
-}
-
-function sortCitasDesc(list = []) {
-    return [...list].sort((a, b) => {
-        const ka = `${a.fecha || ""}T${a.hora_inicio || ""}`;
-        const kb = `${b.fecha || ""}T${b.hora_inicio || ""}`;
         return kb.localeCompare(ka);
     });
 }
@@ -45,17 +36,7 @@ function ModalContent({
 
     const meta = patient?._meta || patient?.expediente || {};
     const sesiones = sortSessionsDesc(patient?._sesiones || patient?.sesiones_clinicas || []);
-    const citas = sortCitasDesc(patient?._citas || []);
     const ultimaSesion = sesiones[0] || null;
-
-    const sessionByCitaId = useMemo(() => {
-        const map = new Map();
-        sesiones.forEach((s) => {
-            const citaId = Number(s.cita_id || s.cita || 0);
-            if (citaId) map.set(citaId, s);
-        });
-        return map;
-    }, [sesiones]);
 
     const steps = useMemo(() => {
         const base = [
@@ -64,6 +45,7 @@ function ModalContent({
             { key: "antecedentes", label: "Antecedentes" },
             { key: "docs", label: "Documentos" },
         ];
+
         base.push({ key: "confirm", label: "Confirmación" });
 
         if (isEdit) {
@@ -207,12 +189,13 @@ function ModalContent({
 
                             <p className="mt-1 text-sm text-slate-500">
                                 {isEdit
-                                    ? "Edita datos del paciente y consulta su historial clínico por cita."
+                                    ? "Edita datos del paciente y consulta su historial clínico general."
                                     : "Captura expediente, dolor corporal, antecedentes y datos fiscales si el paciente necesita factura."}
                             </p>
                         </div>
 
                         <button
+                            type="button"
                             onClick={onClose}
                             className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 lg:w-auto"
                         >
@@ -258,8 +241,7 @@ function ModalContent({
                     {currentStepKey === "historial" && isEdit && (
                         <StepHistorialClinico
                             patient={patient}
-                            citas={citas}
-                            sessionByCitaId={sessionByCitaId}
+                            sesiones={sesiones}
                             onOpenClinicalNote={onOpenClinicalNote}
                             onOpenPrescription={onOpenPrescription}
                             onOpenEvidence={onOpenEvidence}
@@ -288,14 +270,17 @@ function ModalContent({
                                 </button>
                             )}
 
-                            <button
-                                type="button"
-                                onClick={next}
-                                disabled={!canGoNext}
-                                className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-                            >
-                                Siguiente
-                            </button>
+                            {step < steps.length - 1 && (
+                                <button
+                                    type="button"
+                                    onClick={next}
+                                    disabled={!canGoNext}
+                                    className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                                >
+                                    Siguiente
+                                </button>
+                            )}
+
                             <button
                                 type="submit"
                                 className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 sm:w-auto"
@@ -433,7 +418,7 @@ function StepDatosBasicos({ form, updateField }) {
                         />
                     </Field>
 
-                    <Field label="Notas clínicas (resumen)">
+                    <Field label="Notas clínicas generales">
                         <textarea
                             rows={3}
                             className={textareaClass()}
@@ -495,11 +480,6 @@ function StepDatosBasicos({ form, updateField }) {
                                             onChange={(e) => updateField("factura_rfc", e.target.value.toUpperCase())}
                                             placeholder="Ej. XAXX010101000"
                                         />
-                                        {!rfcValido(form.factura_rfc) && String(form.factura_rfc || "").trim() ? (
-                                            <div className="mt-1 text-xs font-semibold text-rose-600">
-                                                RFC con formato inválido.
-                                            </div>
-                                        ) : null}
                                     </Field>
 
                                     <Field label="Régimen fiscal" required>
@@ -571,7 +551,7 @@ function StepDolorCorporal({ form, updateField }) {
                     <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                         <div className="text-sm font-black text-slate-900">Zonas marcadas</div>
                         <div className="mt-2 text-xs text-slate-500">
-                            Se guardarán como nombres legibles dentro de la sesión clínica inicial.
+                            Se guardarán como nombres legibles dentro del historial clínico general.
                         </div>
 
                         <div className="mt-4 flex flex-wrap gap-2">
@@ -711,174 +691,196 @@ function StepDocumentos({ form, updateDoc }) {
 
 function StepHistorialClinico({
     patient,
-    citas,
-    sessionByCitaId,
+    sesiones = [],
     onOpenClinicalNote,
     onOpenPrescription,
     onOpenEvidence,
 }) {
+    const sesionesOrdenadas = sortSessionsDesc(sesiones || []);
+    const ultimaSesion = sesionesOrdenadas[0] || null;
+    const zonasUltimaSesion = getPainLabels(ultimaSesion?.zonas_dolor || []);
+
     return (
         <div className="space-y-5">
             <SectionBox
-                title="Historial clínico por cita"
-                subtitle="Cada cita conserva su motivo, zonas de dolor, nota clínica, receta y evidencias."
+                title="Historial clínico general"
+                subtitle="El historial, recetas y evidencias pertenecen al expediente del paciente. La cita queda como dato opcional, no como requisito."
             >
-                {citas.length === 0 ? (
-                    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                        Este paciente aún no tiene citas registradas.
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_1fr]">
+                    <div className="space-y-4">
+                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="text-sm font-black text-slate-900">
+                                Acciones del expediente
+                            </div>
+
+                            <div className="mt-2 text-xs leading-relaxed text-slate-500">
+                                Usa estas acciones para crear o actualizar información clínica del paciente sin depender de una cita agendada.
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-1 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => onOpenClinicalNote?.({ patient })}
+                                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    <FilePlus2 className="h-4 w-4" />
+                                    Nota / historia clínica
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => onOpenPrescription?.({ patient })}
+                                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    <Pill className="h-4 w-4" />
+                                    Receta médica
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => onOpenEvidence?.({ patient })}
+                                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                    <Paperclip className="h-4 w-4" />
+                                    Evidencias / archivos
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                            <div className="text-sm font-black text-slate-900">
+                                Última información clínica
+                            </div>
+
+                            <div className="mt-3 space-y-3">
+                                <MiniClinicalInfo
+                                    label="Fecha"
+                                    value={ultimaSesion?.fecha ? formatDateMX(ultimaSesion.fecha) : "—"}
+                                />
+
+                                <MiniClinicalInfo
+                                    label="Motivo"
+                                    value={ultimaSesion?.motivo_consulta || "Sin motivo registrado"}
+                                />
+
+                                <MiniClinicalInfo
+                                    label="Diagnóstico"
+                                    value={ultimaSesion?.diagnostico || "Sin diagnóstico registrado"}
+                                />
+
+                                <MiniClinicalInfo
+                                    label="Estado"
+                                    value={ultimaSesion?.estado_sesion || "Sin estado registrado"}
+                                />
+                            </div>
+
+                            <div className="mt-4">
+                                <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                    Zonas registradas
+                                </div>
+
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {zonasUltimaSesion.length === 0 ? (
+                                        <span className="text-sm text-slate-500">
+                                            Sin zonas registradas.
+                                        </span>
+                                    ) : (
+                                        zonasUltimaSesion.map((zona, i) => (
+                                            <span
+                                                key={`${zona}-${i}`}
+                                                className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700"
+                                            >
+                                                {zona}
+                                            </span>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                ) : (
-                    <div className="overflow-hidden rounded-3xl border border-slate-200">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-[1460px] w-full text-sm">
-                                <thead className="border-b border-slate-200 bg-slate-50">
-                                    <tr className="text-left text-slate-600">
-                                        <th className="px-4 py-3 font-semibold">Fecha</th>
-                                        <th className="px-4 py-3 font-semibold">Hora</th>
-                                        <th className="px-4 py-3 font-semibold">Servicio</th>
-                                        <th className="px-4 py-3 font-semibold">Profesional</th>
-                                        <th className="px-4 py-3 font-semibold">Estado cita</th>
-                                        <th className="px-4 py-3 font-semibold">Motivo</th>
-                                        <th className="px-4 py-3 font-semibold">Zonas</th>
-                                        <th className="px-4 py-3 font-semibold">Estado clínico</th>
-                                        <th className="px-4 py-3 font-semibold">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {citas.map((c) => {
-                                        const linkedSession = sessionByCitaId.get(Number(c.id)) || null;
-                                        const zonas = getPainLabels(linkedSession?.zonas_dolor || []);
-                                        const hasNota = !!linkedSession?.has_nota_clinica;
-                                        const hasReceta = !!linkedSession?.has_receta_medica;
-                                        const evidenciasCount = Number(linkedSession?.evidencias_count || 0);
 
-                                        return (
-                                            <tr key={c.id} className="border-b border-slate-100 align-top hover:bg-slate-50">
-                                                <td className="px-4 py-3 whitespace-nowrap text-slate-900">
-                                                    {c.fecha ? formatDateMX(c.fecha) : "—"}
-                                                </td>
+                    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white">
+                        <div className="border-b border-slate-100 px-4 py-4">
+                            <div className="text-sm font-black text-slate-900">
+                                Sesiones clínicas registradas
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                                Estas sesiones ya no dependen de una cita. Se muestran como historial general del expediente.
+                            </div>
+                        </div>
 
-                                                <td className="px-4 py-3 whitespace-nowrap text-slate-700">
-                                                    {formatTimeHM(c.hora_inicio)} - {formatTimeHM(c.hora_termina)}
+                        {sesionesOrdenadas.length === 0 ? (
+                            <div className="p-6 text-center text-sm text-slate-500">
+                                Este paciente aún no tiene sesiones clínicas registradas.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="min-w-[920px] w-full text-sm">
+                                    <thead className="border-b border-slate-200 bg-slate-50">
+                                        <tr className="text-left text-slate-600">
+                                            <th className="px-4 py-3 font-semibold">Fecha</th>
+                                            <th className="px-4 py-3 font-semibold">Motivo</th>
+                                            <th className="px-4 py-3 font-semibold">Diagnóstico</th>
+                                            <th className="px-4 py-3 font-semibold">Tratamiento</th>
+                                            <th className="px-4 py-3 font-semibold">Estado</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        {sesionesOrdenadas.map((s) => (
+                                            <tr
+                                                key={s.id}
+                                                className="border-b border-slate-100 align-top hover:bg-slate-50"
+                                            >
+                                                <td className="whitespace-nowrap px-4 py-3 text-slate-900">
+                                                    {s.fecha ? formatDateMX(s.fecha) : "—"}
                                                 </td>
 
                                                 <td className="px-4 py-3 text-slate-700">
-                                                    {c.servicio_nombre || "—"}
+                                                    <div className="max-w-[240px] whitespace-pre-wrap">
+                                                        {s.motivo_consulta || "—"}
+                                                    </div>
                                                 </td>
 
                                                 <td className="px-4 py-3 text-slate-700">
-                                                    {c.profesional_nombre || "—"}
+                                                    <div className="max-w-[260px] whitespace-pre-wrap">
+                                                        {s.diagnostico || "—"}
+                                                    </div>
+                                                </td>
+
+                                                <td className="px-4 py-3 text-slate-700">
+                                                    <div className="max-w-[260px] whitespace-pre-wrap">
+                                                        {s.tratamiento_realizado || s.recomendaciones || "—"}
+                                                    </div>
                                                 </td>
 
                                                 <td className="px-4 py-3">
                                                     <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                                                        {c.estado || "—"}
+                                                        {s.estado_sesion || "Registrada"}
                                                     </span>
                                                 </td>
-
-                                                <td className="px-4 py-3 text-slate-700">
-                                                    {linkedSession?.motivo_consulta ? (
-                                                        <div className="max-w-[260px] whitespace-pre-wrap">
-                                                            {linkedSession.motivo_consulta}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-xs font-semibold text-amber-700">
-                                                            Sin motivo clínico capturado
-                                                        </span>
-                                                    )}
-                                                </td>
-
-                                                <td className="px-4 py-3 text-slate-700">
-                                                    {zonas.length === 0 ? (
-                                                        <span className="text-xs font-semibold text-amber-700">
-                                                            Sin zonas registradas
-                                                        </span>
-                                                    ) : (
-                                                        <div className="flex max-w-[260px] flex-wrap gap-1.5">
-                                                            {zonas.map((zona, i) => (
-                                                                <span
-                                                                    key={`${c.id}-${zona}-${i}`}
-                                                                    className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700"
-                                                                >
-                                                                    {zona}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </td>
-
-                                                <td className="px-4 py-3">
-                                                    {linkedSession ? (
-                                                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                                                            {linkedSession.estado_sesion || "Sesión registrada"}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                                                            Sin sesión clínica
-                                                        </span>
-                                                    )}
-                                                </td>
-
-                                                <td className="px-4 py-3">
-                                                    <div className="flex min-w-[420px] flex-wrap gap-2">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                onOpenClinicalNote?.({
-                                                                    patient,
-                                                                    cita: c,
-                                                                    session: linkedSession,
-                                                                    citaId: c.id,
-                                                                })
-                                                            }
-                                                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                                                        >
-                                                            <FilePlus2 className="h-4 w-4" />
-                                                            {hasNota ? "Ver / editar nota" : "Agregar nota clínica"}
-                                                        </button>
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                onOpenPrescription?.({
-                                                                    patient,
-                                                                    cita: c,
-                                                                    session: linkedSession,
-                                                                    citaId: c.id,
-                                                                })
-                                                            }
-                                                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                                                        >
-                                                            <Pill className="h-4 w-4" />
-                                                            {hasReceta ? "Ver / editar receta" : "Generar receta"}
-                                                        </button>
-
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                onOpenEvidence?.({
-                                                                    patient,
-                                                                    cita: c,
-                                                                    session: linkedSession,
-                                                                    citaId: c.id,
-                                                                })
-                                                            }
-                                                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                                                        >
-                                                            <Paperclip className="h-4 w-4" />
-                                                            Evidencias {evidenciasCount ? `(${evidenciasCount})` : ""}
-                                                        </button>
-                                                    </div>
-                                                </td>
                                             </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
-                )}
+                </div>
             </SectionBox>
+        </div>
+    );
+}
+
+function MiniClinicalInfo({ label, value }) {
+    return (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                {label}
+            </div>
+            <div className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-900">
+                {value || "—"}
+            </div>
         </div>
     );
 }
@@ -923,7 +925,7 @@ function StepConfirmacion({ form }) {
                     <SummaryBlock title="Otras enfermedades" value={A.otrasEnfermedades || "—"} />
                     <SummaryBlock title="Tratamientos previos" value={A.tratamientosPrevios || "—"} />
                     <SummaryBlock title="Medicamentos actuales" value={A.medicamentosActuales || "—"} />
-                    <SummaryBlock title="Notas clínicas" value={form.notas || "—"} />
+                    <SummaryBlock title="Notas clínicas generales" value={form.notas || "—"} />
 
                     <div className="rounded-3xl border border-slate-200 bg-white p-4">
                         <div className="text-sm font-black text-slate-900">Zonas de dolor</div>
@@ -979,6 +981,7 @@ function SectionBox({ title, subtitle, children }) {
                 <div className="text-lg font-black text-slate-900">{title}</div>
                 {subtitle ? <div className="mt-1 text-sm text-slate-500">{subtitle}</div> : null}
             </div>
+
             <div className="mt-5">{children}</div>
         </div>
     );

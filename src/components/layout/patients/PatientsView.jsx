@@ -1,19 +1,18 @@
-//src/components/layout/patient/PatientView.jsx
-import { useEffect, useMemo, useState, useCallback } from "react";
+// src/components/layout/patient/PatientView.jsx
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Search,
-  Plus,
-  Eye,
-  Pencil,
-  Trash2,
-  UserRound,
-  CalendarDays,
-  ShieldCheck,
-  ClipboardList,
   Activity,
+  ClipboardList,
+  Eye,
   FileText,
   ImageIcon,
+  Pencil,
+  Plus,
+  Search,
+  ShieldCheck,
+  Trash2,
+  UserRound,
 } from "lucide-react";
 
 import PatientProfileModal from "./PatientProfileModal";
@@ -35,13 +34,21 @@ import {
 
 const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
-async function openProtectedBinary(url, { filename = "documento.pdf", download = false } = {}) {
+function limpiarSesion() {
+  localStorage.removeItem("auth.access");
+  localStorage.removeItem("auth.refresh");
+  localStorage.removeItem("auth.user");
+  window.location.href = "/login";
+}
+
+async function openProtectedBinary(
+  url,
+  { filename = "documento.pdf", download = false } = {}
+) {
   const token = localStorage.getItem("auth.access");
+
   if (!token) {
-    localStorage.removeItem("auth.access");
-    localStorage.removeItem("auth.refresh");
-    localStorage.removeItem("auth.user");
-    window.location.href = "/login";
+    limpiarSesion();
     return;
   }
 
@@ -52,19 +59,18 @@ async function openProtectedBinary(url, { filename = "documento.pdf", download =
   });
 
   if (resp.status === 401) {
-    localStorage.removeItem("auth.access");
-    localStorage.removeItem("auth.refresh");
-    localStorage.removeItem("auth.user");
-    window.location.href = "/login";
+    limpiarSesion();
     return;
   }
 
   if (!resp.ok) {
     let detail = "No se pudo abrir el archivo.";
+
     try {
       const data = await resp.json();
       detail = data?.detail || detail;
     } catch { }
+
     throw new Error(detail);
   }
 
@@ -91,6 +97,7 @@ function getEvidenceFileUrl(item) {
 
 function normalizeExpediente(expediente) {
   const e = expediente || {};
+
   return {
     ocupacion: e.ocupacion || "",
     direccion: e.direccion || "",
@@ -111,7 +118,10 @@ function sortSessionsDesc(list = []) {
 }
 
 function enhancePatient(rawPatient, citasList = []) {
-  const cp = citasList.filter((c) => Number(c.paciente) === Number(rawPatient.id));
+  const cp = citasList.filter(
+    (c) => Number(c.paciente) === Number(rawPatient.id)
+  );
+
   const expediente = normalizeExpediente(rawPatient.expediente);
   const sesiones = sortSessionsDesc(rawPatient.sesiones_clinicas || []);
 
@@ -124,24 +134,20 @@ function enhancePatient(rawPatient, citasList = []) {
     if (c.profesional) professionalsSet.add(c.profesional);
 
     const key = `${c.fecha || ""}T${c.hora_inicio || ""}`;
-    if (!lastCita) {
-      lastCita = { ...c, _key: key };
-    } else if (key > lastCita._key) {
+
+    if (!lastCita || key > lastCita._key) {
       lastCita = { ...c, _key: key };
     }
   });
-
-  const hasReservations = cp.length > 0;
-  const lastServiceName = lastCita?.servicio_nombre || "";
 
   return {
     ...rawPatient,
     fullName: getFullName(rawPatient),
     fullNameDisplay: getFullName(rawPatient),
-    lastServiceName,
+    lastServiceName: lastCita?.servicio_nombre || "",
     servicesSet,
     professionalsSet,
-    hasReservations,
+    hasReservations: cp.length > 0,
     branchLabel: "Fisionerv Centro",
     _citas: cp,
     _meta: expediente,
@@ -150,7 +156,6 @@ function enhancePatient(rawPatient, citasList = []) {
     _ultimaSesion: sesiones[0] || null,
   };
 }
-
 
 function getEmptyContenidoNom004(tipo = "evolucion") {
   const base = {
@@ -211,14 +216,18 @@ function getLegacySoapFromNom004(tipo, contenido = {}) {
         contenido.consumo_sustancias_psicoactivas,
         contenido.padecimiento_actual,
         contenido.interrogatorio_aparatos_sistemas,
-      ].filter(Boolean).join("\n\n"),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
       objetivo: [
         contenido.habitus_exterior,
         contenido.signos_vitales,
         contenido.peso_talla,
         contenido.exploracion_fisica,
         contenido.resultados_estudios,
-      ].filter(Boolean).join("\n\n"),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
       analisis: contenido.diagnosticos_problemas || "",
       plan: contenido.indicacion_terapeutica || "",
       observaciones: contenido.pronostico || "",
@@ -237,21 +246,80 @@ function getLegacySoapFromNom004(tipo, contenido = {}) {
 
   if (tipo === "referencia_traslado") {
     return {
-      subjetivo: [contenido.motivo_envio, contenido.impresion_diagnostica].filter(Boolean).join("\n\n"),
+      subjetivo: [contenido.motivo_envio, contenido.impresion_diagnostica]
+        .filter(Boolean)
+        .join("\n\n"),
       objetivo: contenido.terapeutica_empleada || "",
       analisis: contenido.resumen_clinico || "",
-      plan: [contenido.establecimiento_envia, contenido.establecimiento_receptor].filter(Boolean).join("\n\n"),
+      plan: [
+        contenido.establecimiento_envia,
+        contenido.establecimiento_receptor,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
       observaciones: "",
     };
   }
 
   return {
     subjetivo: contenido.evolucion_cuadro_clinico || "",
-    objetivo: [contenido.signos_vitales, contenido.resultados_relevantes].filter(Boolean).join("\n\n"),
+    objetivo: [contenido.signos_vitales, contenido.resultados_relevantes]
+      .filter(Boolean)
+      .join("\n\n"),
     analisis: contenido.diagnosticos_problemas || "",
     plan: contenido.tratamiento_indicaciones || "",
     observaciones: contenido.pronostico || "",
   };
+}
+
+function normalizePainPayload(pain = []) {
+  if (!Array.isArray(pain)) return [];
+
+  return pain
+    .map((item) => {
+      if (!item) return null;
+
+      if (typeof item === "string") {
+        return {
+          id: item,
+          meshName: item,
+          label: getPainLabels([item])[0] || item,
+          side: null,
+        };
+      }
+
+      const id = item?.id || item?.meshName || "";
+      if (!id) return null;
+
+      return {
+        id,
+        meshName: item?.meshName || id,
+        label: item?.label || getPainLabels([item])[0] || id,
+        side: item?.side ?? null,
+      };
+    })
+    .filter(Boolean);
+}
+
+function previewTypeFromItem(item) {
+  if (item?.tipo_archivo === "imagen") return "imagen";
+  if (item?.tipo_archivo === "pdf") return "pdf";
+
+  const url = String(getEvidenceFileUrl(item) || "").toLowerCase();
+
+  if (/\.(jpg|jpeg|png|webp)(\?|$)/.test(url)) return "imagen";
+  if (/\.pdf(\?|$)/.test(url)) return "pdf";
+
+  return "otro";
+}
+
+function formatDateForHeader(value) {
+  if (!value) return "—";
+
+  const [y, m, d] = String(value).split("-");
+  if (!y || !m || !d) return value;
+
+  return `${d}/${m}/${y}`;
 }
 
 export function PatientsView({ onPrivacyLockChange }) {
@@ -260,20 +328,46 @@ export function PatientsView({ onPrivacyLockChange }) {
   const [professionals, setProfessionals] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [noteModal, setNoteModal] = useState({ open: false, payload: null, data: null });
-  const [rxModal, setRxModal] = useState({ open: false, payload: null, data: null });
-  const [evidenceModal, setEvidenceModal] = useState({ open: false, payload: null, items: [] });
+  const [noteModal, setNoteModal] = useState({
+    open: false,
+    payload: null,
+    data: null,
+  });
+
+  const [rxModal, setRxModal] = useState({
+    open: false,
+    payload: null,
+    data: null,
+  });
+
+  const [evidenceModal, setEvidenceModal] = useState({
+    open: false,
+    payload: null,
+    items: [],
+  });
 
   const [defaultClinicId, setDefaultClinicId] = useState(1);
 
   const sidebarDefaults = readPatientsSidebarFilters();
   const [search, setSearch] = useState(sidebarDefaults.search || "");
-  const [filterBranch, setFilterBranch] = useState(sidebarDefaults.filterBranch || "Todos");
-  const [filterProfessional, setFilterProfessional] = useState(sidebarDefaults.filterProfessional || "Todos");
-  const [filterService, setFilterService] = useState(sidebarDefaults.filterService || "Todos");
-  const [filterStatus, setFilterStatus] = useState(sidebarDefaults.filterStatus || "Todos");
-  const [filterStartDate, setFilterStartDate] = useState(sidebarDefaults.filterStartDate || "");
-  const [filterEndDate, setFilterEndDate] = useState(sidebarDefaults.filterEndDate || "");
+  const [filterBranch, setFilterBranch] = useState(
+    sidebarDefaults.filterBranch || "Todos"
+  );
+  const [filterProfessional, setFilterProfessional] = useState(
+    sidebarDefaults.filterProfessional || "Todos"
+  );
+  const [filterService, setFilterService] = useState(
+    sidebarDefaults.filterService || "Todos"
+  );
+  const [filterStatus, setFilterStatus] = useState(
+    sidebarDefaults.filterStatus || "Todos"
+  );
+  const [filterStartDate, setFilterStartDate] = useState(
+    sidebarDefaults.filterStartDate || ""
+  );
+  const [filterEndDate, setFilterEndDate] = useState(
+    sidebarDefaults.filterEndDate || ""
+  );
 
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -285,34 +379,43 @@ export function PatientsView({ onPrivacyLockChange }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const logoutAndRedirect = () => {
-    localStorage.removeItem("auth.access");
-    localStorage.removeItem("auth.refresh");
-    localStorage.removeItem("auth.user");
-    window.location.href = "/login";
-  };
+  const logoutAndRedirect = useCallback(() => {
+    limpiarSesion();
+  }, []);
 
-  useEffect(() => {
-    const locked =
-      formOpen ||
-      profileOpen ||
-      noteModal.open ||
-      rxModal.open ||
-      evidenceModal.open;
+  async function fetchJsonAuth(url, options = {}) {
+    const token = localStorage.getItem("auth.access");
 
-    onPrivacyLockChange?.(locked);
-    return () => onPrivacyLockChange?.(false);
-  }, [
-    formOpen,
-    profileOpen,
-    noteModal.open,
-    rxModal.open,
-    evidenceModal.open,
-    onPrivacyLockChange,
-  ]);
+    if (!token) {
+      logoutAndRedirect();
+      return null;
+    }
+
+    const resp = await fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (resp.status === 401) {
+      logoutAndRedirect();
+      return null;
+    }
+
+    const data = await resp.json().catch(() => null);
+
+    if (!resp.ok) {
+      throw new Error(data?.detail || "Error en request");
+    }
+
+    return data;
+  }
 
   const loadAll = useCallback(async () => {
     const token = localStorage.getItem("auth.access");
+
     if (!token) {
       logoutAndRedirect();
       return;
@@ -370,15 +473,36 @@ export function PatientsView({ onPrivacyLockChange }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [logoutAndRedirect]);
 
   useEffect(() => {
     loadAll();
   }, [loadAll]);
 
   useEffect(() => {
+    const locked =
+      formOpen ||
+      profileOpen ||
+      noteModal.open ||
+      rxModal.open ||
+      evidenceModal.open;
+
+    onPrivacyLockChange?.(locked);
+
+    return () => onPrivacyLockChange?.(false);
+  }, [
+    formOpen,
+    profileOpen,
+    noteModal.open,
+    rxModal.open,
+    evidenceModal.open,
+    onPrivacyLockChange,
+  ]);
+
+  useEffect(() => {
     function handleSidebarFilters(e) {
       const next = e?.detail || readPatientsSidebarFilters();
+
       setSearch(next.search || "");
       setFilterBranch(next.filterBranch || "Todos");
       setFilterProfessional(next.filterProfessional || "Todos");
@@ -389,13 +513,18 @@ export function PatientsView({ onPrivacyLockChange }) {
     }
 
     const initial = readPatientsSidebarFilters();
+
     window.dispatchEvent(
       new CustomEvent("patients:filters:sync", { detail: initial })
     );
+
     window.addEventListener("patients:filters:change", handleSidebarFilters);
 
     return () => {
-      window.removeEventListener("patients:filters:change", handleSidebarFilters);
+      window.removeEventListener(
+        "patients:filters:change",
+        handleSidebarFilters
+      );
     };
   }, []);
 
@@ -406,7 +535,10 @@ export function PatientsView({ onPrivacyLockChange }) {
   useEffect(() => {
     if (!selectedPatient?.id) return;
 
-    const fresh = enhancedPatients.find((p) => Number(p.id) === Number(selectedPatient.id));
+    const fresh = enhancedPatients.find(
+      (p) => Number(p.id) === Number(selectedPatient.id)
+    );
+
     if (fresh && fresh !== selectedPatient) {
       setSelectedPatient(fresh);
     }
@@ -414,7 +546,11 @@ export function PatientsView({ onPrivacyLockChange }) {
 
   const servicesForFilter = useMemo(() => {
     const set = new Set();
-    enhancedPatients.forEach((p) => p.servicesSet?.forEach((s) => s && set.add(s)));
+
+    enhancedPatients.forEach((p) => {
+      p.servicesSet?.forEach((s) => s && set.add(s));
+    });
+
     return Array.from(set).sort();
   }, [enhancedPatients]);
 
@@ -428,8 +564,11 @@ export function PatientsView({ onPrivacyLockChange }) {
           })),
           services: servicesForFilter,
           total: enhancedPatients.length,
-          withAppointments: enhancedPatients.filter((p) => p.hasReservations).length,
-          withoutAppointments: enhancedPatients.filter((p) => !p.hasReservations).length,
+          withAppointments: enhancedPatients.filter((p) => p.hasReservations)
+            .length,
+          withoutAppointments: enhancedPatients.filter(
+            (p) => !p.hasReservations
+          ).length,
         },
       })
     );
@@ -437,17 +576,32 @@ export function PatientsView({ onPrivacyLockChange }) {
 
   const stats = useMemo(() => {
     const total = enhancedPatients.length;
-    const enTratamiento = enhancedPatients.filter((p) => p.estado_tratamiento !== "alta").length;
-    const alta = enhancedPatients.filter((p) => p.estado_tratamiento === "alta").length;
-    const conCitas = enhancedPatients.filter((p) => p.hasReservations).length;
-    return { total, enTratamiento, alta, conCitas };
+
+    const enTratamiento = enhancedPatients.filter(
+      (p) => p.estado_tratamiento !== "alta"
+    ).length;
+
+    const alta = enhancedPatients.filter(
+      (p) => p.estado_tratamiento === "alta"
+    ).length;
+
+    const conHistorial = enhancedPatients.filter(
+      (p) => (p._sesiones || []).length > 0
+    ).length;
+
+    return {
+      total,
+      enTratamiento,
+      alta,
+      conHistorial,
+    };
   }, [enhancedPatients]);
 
   const filteredPatients = useMemo(() => {
     const term = search.toLowerCase();
-    const profId = filterProfessional === "Todos" ? null : Number(filterProfessional);
+    const profId =
+      filterProfessional === "Todos" ? null : Number(filterProfessional);
     const serviceName = filterService === "Todos" ? null : filterService;
-    const status = filterStatus;
 
     return enhancedPatients
       .filter((p) => {
@@ -460,15 +614,33 @@ export function PatientsView({ onPrivacyLockChange }) {
           if (!hayCoincidencia) return false;
         }
 
-        if (filterBranch !== "Todos" && p.branchLabel !== filterBranch) return false;
-        if (profId && !p.professionalsSet.has(profId)) return false;
-        if (serviceName && !p.servicesSet.has(serviceName)) return false;
+        if (filterBranch !== "Todos" && p.branchLabel !== filterBranch) {
+          return false;
+        }
 
-        if (status === "Con reservas" && !p.hasReservations) return false;
-        if (status === "Sin reservas" && p.hasReservations) return false;
+        if (profId && !p.professionalsSet.has(profId)) {
+          return false;
+        }
 
-        if (filterStartDate && (!p.registro || p.registro < filterStartDate)) return false;
-        if (filterEndDate && (!p.registro || p.registro > filterEndDate)) return false;
+        if (serviceName && !p.servicesSet.has(serviceName)) {
+          return false;
+        }
+
+        if (filterStatus === "Con reservas" && !p.hasReservations) {
+          return false;
+        }
+
+        if (filterStatus === "Sin reservas" && p.hasReservations) {
+          return false;
+        }
+
+        if (filterStartDate && (!p.registro || p.registro < filterStartDate)) {
+          return false;
+        }
+
+        if (filterEndDate && (!p.registro || p.registro > filterEndDate)) {
+          return false;
+        }
 
         return true;
       })
@@ -484,45 +656,48 @@ export function PatientsView({ onPrivacyLockChange }) {
     filterEndDate,
   ]);
 
-  const handleOpenCreate = () => {
+  function handleOpenCreate() {
     setFormMode("create");
     setFormInitialStepKey("basicos");
     setSelectedPatient(null);
     setFormOpen(true);
-  };
+  }
 
-  const handleOpenEdit = (patient) => {
+  function handleOpenEdit(patient) {
     setFormMode("edit");
     setFormInitialStepKey("basicos");
     setSelectedPatient(patient);
     setFormOpen(true);
-  };
+  }
 
-  const handleOpenHistory = (patient) => {
+  function handleOpenHistory(patient) {
     setFormMode("edit");
     setFormInitialStepKey("historial");
     setSelectedPatient(patient);
     setFormOpen(true);
-  };
+  }
 
-  const handleOpenProfile = (patient) => {
+  function handleOpenProfile(patient) {
     setSelectedPatient(patient);
     setProfileOpen(true);
-  };
+  }
 
-  const handleDeletePatient = (patient) => {
+  function handleDeletePatient(patient) {
     setDeleteTarget(patient);
     setDeleteOpen(true);
-  };
+  }
 
-  const confirmDeletePatient = async (patient) => {
+  async function confirmDeletePatient(patient) {
     const token = localStorage.getItem("auth.access");
+
     if (!token) return logoutAndRedirect();
 
     try {
       const resp = await fetch(`${API_BASE}/api/pacientes/${patient.id}/`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (resp.status === 401) return logoutAndRedirect();
@@ -541,54 +716,41 @@ export function PatientsView({ onPrivacyLockChange }) {
     } catch (e) {
       console.error("Error al eliminar paciente:", e);
     }
-  };
-
-  async function fetchJsonAuth(url, options = {}) {
-    const token = localStorage.getItem("auth.access");
-    if (!token) return logoutAndRedirect();
-
-    const resp = await fetch(url, {
-      ...options,
-      headers: {
-        ...(options.headers || {}),
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (resp.status === 401) {
-      logoutAndRedirect();
-      return null;
-    }
-
-    const data = await resp.json().catch(() => null);
-    if (!resp.ok) throw new Error(data?.detail || "Error en request");
-    return data;
   }
 
-  async function getSessionByCita(citaId) {
-    if (!citaId) return null;
-    const data = await fetchJsonAuth(`${API_BASE}/api/sesiones-clinicas/?cita=${citaId}`);
+  async function getLatestSessionByPatient(patientId) {
+    if (!patientId) return null;
+
+    const data = await fetchJsonAuth(
+      `${API_BASE}/api/sesiones-clinicas/?paciente=${patientId}`
+    );
+
     if (Array.isArray(data) && data.length) return data[0];
+
     return null;
   }
 
-  async function ensureSessionForCita({ cita, patientId, form }) {
+  async function ensureSessionForPatient({ patientId, form }) {
     const token = localStorage.getItem("auth.access");
+
     if (!token) return null;
 
-    const fechaBase = form.fecha || cita?.fecha || new Date().toISOString().slice(0, 10);
+    const fechaBase = form.fecha || new Date().toISOString().slice(0, 10);
+
     const diagnosticoResumen =
       form.diagnostico_resumen ||
       form.diagnostico ||
       form?.contenido_nom004?.diagnosticos_problemas ||
       form?.contenido_nom004?.impresion_diagnostica ||
       "";
+
     const recomendacionesResumen =
       form.recomendaciones_resumen ||
       form?.contenido_nom004?.indicacion_terapeutica ||
       form?.contenido_nom004?.tratamiento_indicaciones ||
       form?.contenido_nom004?.terapeutica_empleada ||
       "";
+
     const exploracionResumen =
       form.exploracion_resumen ||
       form?.contenido_nom004?.exploracion_fisica ||
@@ -596,58 +758,49 @@ export function PatientsView({ onPrivacyLockChange }) {
 
     const payloadBase = {
       paciente: patientId,
-      cita: cita?.id || form.cita || null,
+      cita: form.cita || null,
       fecha: fechaBase,
       motivo_consulta: form.motivo_consulta || "",
+      intensidad_dolor: form.intensidad_dolor ?? null,
       zonas_dolor: Array.isArray(form.zonas_dolor) ? form.zonas_dolor : [],
+      notas: form.notas || "",
       exploracion: exploracionResumen,
       diagnostico: diagnosticoResumen,
+      tratamiento_realizado: form.tratamiento_realizado || "",
       recomendaciones: recomendacionesResumen,
+      estado_sesion: form.estado_sesion || "",
     };
 
-    if (form.sesion_clinica) {
-      const resp = await fetch(`${API_BASE}/api/sesiones-clinicas/${form.sesion_clinica}/`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payloadBase),
-      });
+    const sessionId = form.sesion_clinica || null;
 
-      const data = await resp.json().catch(() => null);
-      if (!resp.ok) {
-        console.error("Error actualizando sesión clínica:", data || resp.status);
-        return null;
-      }
-      return data;
-    }
+    const url = sessionId
+      ? `${API_BASE}/api/sesiones-clinicas/${sessionId}/`
+      : `${API_BASE}/api/sesiones-clinicas/`;
 
-    const resp = await fetch(`${API_BASE}/api/sesiones-clinicas/`, {
-      method: "POST",
+    const method = sessionId ? "PATCH" : "POST";
+
+    const resp = await fetch(url, {
+      method,
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        ...payloadBase,
-        intensidad_dolor: null,
-        notas: "",
-        tratamiento_realizado: "",
-        estado_sesion: "",
-      }),
+      body: JSON.stringify(payloadBase),
     });
 
     const data = await resp.json().catch(() => null);
+
     if (!resp.ok) {
-      console.error("Error creando sesión clínica ligada a la cita:", data || resp.status);
+      console.error("Error guardando sesión clínica general:", data || resp.status);
       return null;
     }
+
     return data;
   }
 
-  function buildNoteFormBase({ patient, cita, linkedSession, note }) {
-    const tipoNota = note?.tipo_nota || "evolucion";
+  function buildNoteFormBase({ patient, linkedSession, note }) {
+    const tipoNota = note?.tipo_nota || "historia_clinica";
+
     const contenido = {
       ...getEmptyContenidoNom004(tipoNota),
       ...(note?.contenido_nom004 || {}),
@@ -656,136 +809,132 @@ export function PatientsView({ onPrivacyLockChange }) {
     return {
       id: note?.id || null,
       paciente: patient.id,
-      cita: cita?.id || null,
+      cita: note?.cita || linkedSession?.cita || null,
       sesion_clinica: linkedSession?.id || note?.sesion_clinica || null,
-      fecha: note?.fecha || cita?.fecha || linkedSession?.fecha || new Date().toISOString().slice(0, 10),
-      cita_fecha: cita?.fecha || linkedSession?.fecha || new Date().toISOString().slice(0, 10),
+      fecha:
+        note?.fecha ||
+        linkedSession?.fecha ||
+        new Date().toISOString().slice(0, 10),
       tipo_nota: tipoNota,
-      motivo_consulta: linkedSession?.motivo_consulta || "",
-      zonas_dolor: Array.isArray(linkedSession?.zonas_dolor) ? linkedSession.zonas_dolor : [],
+      motivo_consulta: linkedSession?.motivo_consulta || patient?.molestia || "",
+      zonas_dolor: Array.isArray(linkedSession?.zonas_dolor)
+        ? linkedSession.zonas_dolor
+        : [],
       contenido_nom004: contenido,
       subjetivo: note?.subjetivo || "",
       objetivo: note?.objetivo || "",
       analisis: note?.analisis || "",
       plan: note?.plan || "",
       observaciones: note?.observaciones || "",
-      paciente_nombre: patient.fullNameDisplay || patient.fullName || getFullName(patient),
+      paciente_nombre:
+        patient.fullNameDisplay || patient.fullName || getFullName(patient),
       paciente_fecha_nac: patient.fecha_nac || "",
-      profesional_nombre: cita?.profesional_nombre || linkedSession?.profesional_nombre || "",
+      profesional_nombre:
+        note?.profesional_nombre || linkedSession?.profesional_nombre || "",
       profesional_cedula: note?.profesional_cedula || "",
     };
   }
 
-  function buildPrescriptionBase({ patient, cita, session, receta, professionals }) {
-    const professional = (professionals || []).find((item) => Number(item.id) === Number(cita?.profesional));
+  function buildPrescriptionBase({ patient, session, receta }) {
     return {
       id: receta?.id || null,
       paciente: patient.id,
-      cita: cita?.id || null,
-      fecha: receta?.fecha || cita?.fecha || session?.fecha || new Date().toISOString().slice(0, 10),
+      cita: receta?.cita || session?.cita || null,
+      fecha:
+        receta?.fecha ||
+        session?.fecha ||
+        new Date().toISOString().slice(0, 10),
       diagnostico: receta?.diagnostico || session?.diagnostico || "",
-      indicaciones_generales: receta?.indicaciones_generales || session?.recomendaciones || "",
-      medicamentos: Array.isArray(receta?.medicamentos) ? receta.medicamentos : [],
-      paciente_nombre: patient.fullNameDisplay || patient.fullName || getFullName(patient),
+      indicaciones_generales:
+        receta?.indicaciones_generales || session?.recomendaciones || "",
+      medicamentos: Array.isArray(receta?.medicamentos)
+        ? receta.medicamentos
+        : [],
+      paciente_nombre:
+        patient.fullNameDisplay || patient.fullName || getFullName(patient),
       paciente_fecha_nac: patient.fecha_nac || "",
-      profesional_nombre: receta?.profesional_nombre || cita?.profesional_nombre || professional?.full_name || professional?.label || "",
-      profesional_cedula: receta?.profesional_cedula || professional?.cedula_profesional || "",
+      profesional_nombre:
+        receta?.profesional_nombre || session?.profesional_nombre || "",
+      profesional_cedula: receta?.profesional_cedula || "",
     };
   }
 
-  async function handleOpenClinicalNote({ patient, cita, session, citaId }) {
+  async function handleOpenClinicalNote({ patient }) {
     try {
-      const effectiveCitaId = citaId || cita?.id || null;
-      const linkedSession = session || (effectiveCitaId ? await getSessionByCita(effectiveCitaId) : null);
-      const noteData = effectiveCitaId
-        ? await fetchJsonAuth(`${API_BASE}/api/notas-clinicas/?cita=${effectiveCitaId}`)
-        : [];
+      const linkedSession = await getLatestSessionByPatient(patient.id);
+
+      const noteData = await fetchJsonAuth(
+        `${API_BASE}/api/notas-clinicas/?paciente=${patient.id}`
+      );
 
       const note = Array.isArray(noteData) && noteData.length ? noteData[0] : null;
 
       setNoteModal({
         open: true,
-        payload: { patient, cita, session: linkedSession, citaId: effectiveCitaId },
-        data: buildNoteFormBase({ patient, cita, linkedSession, note }),
+        payload: {
+          patient,
+          session: linkedSession,
+        },
+        data: buildNoteFormBase({
+          patient,
+          linkedSession,
+          note,
+        }),
       });
     } catch (error) {
-      console.error("Error abriendo nota clínica:", error);
-      alert("No se pudo abrir la nota clínica. Si agregaste campos nuevos en backend, verifica migraciones y reinicia el servidor.");
+      console.error("Error abriendo nota clínica general:", error);
+      alert("No se pudo abrir la nota clínica general del paciente.");
     }
   }
 
-  async function handleOpenPrescription({ patient, cita, session, citaId }) {
-    const effectiveCitaId = citaId || cita?.id || null;
-    if (!effectiveCitaId) {
-      alert("Para generar o editar receta médica, la acción debe abrirse desde una cita.");
-      return;
-    }
-
+  async function handleOpenPrescription({ patient }) {
     try {
-      const linkedSession = session || (effectiveCitaId ? await getSessionByCita(effectiveCitaId) : null);
-      const data = await fetchJsonAuth(`${API_BASE}/api/recetas-medicas/?cita=${effectiveCitaId}`);
+      const linkedSession = await getLatestSessionByPatient(patient.id);
+
+      const data = await fetchJsonAuth(
+        `${API_BASE}/api/recetas-medicas/?paciente=${patient.id}`
+      );
+
       const receta = Array.isArray(data) && data.length ? data[0] : null;
 
       setRxModal({
         open: true,
-        payload: { patient, cita, session: linkedSession, citaId: effectiveCitaId },
+        payload: {
+          patient,
+          session: linkedSession,
+        },
         data: buildPrescriptionBase({
           patient,
-          cita,
           session: linkedSession,
           receta,
-          professionals,
         }),
       });
     } catch (error) {
-      console.error("Error abriendo receta médica:", error);
+      console.error("Error abriendo receta médica general:", error);
+      alert("No se pudo abrir la receta médica del paciente.");
     }
   }
 
-  async function handleOpenEvidence({ patient, cita, session, citaId }) {
-    const effectiveCitaId = citaId || cita?.id || null;
-    if (!effectiveCitaId) {
-      alert("Para cargar evidencias clínicas, la acción debe abrirse desde una cita.");
-      return;
+  async function handleOpenEvidence({ patient }) {
+    try {
+      const linkedSession = await getLatestSessionByPatient(patient.id);
+
+      const data = await fetchJsonAuth(
+        `${API_BASE}/api/evidencias-clinicas/?paciente=${patient.id}`
+      );
+
+      setEvidenceModal({
+        open: true,
+        payload: {
+          patient,
+          session: linkedSession,
+        },
+        items: Array.isArray(data) ? data : [],
+      });
+    } catch (error) {
+      console.error("Error abriendo evidencias clínicas generales:", error);
+      alert("No se pudieron abrir las evidencias clínicas del paciente.");
     }
-
-    const linkedSession = session || (effectiveCitaId ? await getSessionByCita(effectiveCitaId) : null);
-    const data = await fetchJsonAuth(`${API_BASE}/api/evidencias-clinicas/?cita=${effectiveCitaId}`);
-
-    setEvidenceModal({
-      open: true,
-      payload: { patient, cita, session: linkedSession, citaId: effectiveCitaId },
-      items: Array.isArray(data) ? data : [],
-    });
-  }
-
-  function normalizePainPayload(pain = []) {
-    if (!Array.isArray(pain)) return [];
-
-    return pain
-      .map((item) => {
-        if (!item) return null;
-
-        if (typeof item === "string") {
-          return {
-            id: item,
-            meshName: item,
-            label: getPainLabels([item])[0] || item,
-            side: null,
-          };
-        }
-
-        const id = item?.id || item?.meshName || "";
-        if (!id) return null;
-
-        return {
-          id,
-          meshName: item?.meshName || id,
-          label: item?.label || getPainLabels([item])[0] || id,
-          side: item?.side ?? null,
-        };
-      })
-      .filter(Boolean);
   }
 
   async function syncPatientClinicalSession({
@@ -818,9 +967,8 @@ export function PatientsView({ onPrivacyLockChange }) {
       estado_sesion: latestSession?.estado_sesion || "",
     };
 
-    const linkedCitaId = latestSession?.cita_id || latestSession?.cita || null;
-    if (linkedCitaId) {
-      payload.cita = linkedCitaId;
+    if (latestSession?.cita_id || latestSession?.cita) {
+      payload.cita = latestSession.cita_id || latestSession.cita;
     }
 
     const url = latestSession?.id
@@ -847,20 +995,25 @@ export function PatientsView({ onPrivacyLockChange }) {
     return await resp.json();
   }
 
-  const handleSavePatient = async (formData) => {
+  async function handleSavePatient(formData) {
     const token = localStorage.getItem("auth.access");
+
     if (!token) return logoutAndRedirect();
 
     const isEdit = formMode === "edit" && selectedPatient;
+
     const url = isEdit
       ? `${API_BASE}/api/pacientes/${selectedPatient.id}/`
       : `${API_BASE}/api/pacientes/`;
+
     const method = isEdit ? "PATCH" : "POST";
 
     const nameParts = splitFullName(formData.nombre);
 
     const payload = {
-      clinica: isEdit ? selectedPatient.clinica || defaultClinicId : defaultClinicId,
+      clinica: isEdit
+        ? selectedPatient.clinica || defaultClinicId
+        : defaultClinicId,
       nombres: nameParts.nombres,
       apellido_pat: nameParts.apellido_pat,
       apellido_mat: nameParts.apellido_mat || "",
@@ -876,12 +1029,24 @@ export function PatientsView({ onPrivacyLockChange }) {
           ? formData.fecha_alta || null
           : null,
       requiere_factura: !!formData.requiere_factura,
-      facturacion_razon_social: formData.requiere_factura ? formData.factura_razon_social || "" : "",
-      facturacion_rfc: formData.requiere_factura ? formData.factura_rfc || "" : "",
-      facturacion_regimen_fiscal: formData.requiere_factura ? formData.factura_regimen_fiscal || "" : "",
-      facturacion_codigo_postal: formData.requiere_factura ? formData.factura_codigo_postal || "" : "",
-      facturacion_uso_cfdi: formData.requiere_factura ? formData.factura_uso_cfdi || "" : "",
-      facturacion_correo: formData.requiere_factura ? formData.factura_correo || "" : "",
+      facturacion_razon_social: formData.requiere_factura
+        ? formData.factura_razon_social || ""
+        : "",
+      facturacion_rfc: formData.requiere_factura
+        ? formData.factura_rfc || ""
+        : "",
+      facturacion_regimen_fiscal: formData.requiere_factura
+        ? formData.factura_regimen_fiscal || ""
+        : "",
+      facturacion_codigo_postal: formData.requiere_factura
+        ? formData.factura_codigo_postal || ""
+        : "",
+      facturacion_uso_cfdi: formData.requiere_factura
+        ? formData.factura_uso_cfdi || ""
+        : "",
+      facturacion_correo: formData.requiere_factura
+        ? formData.factura_correo || ""
+        : "",
       expediente: {
         ocupacion: formData.ocupacion || "",
         direccion: formData.direccion || "",
@@ -930,7 +1095,7 @@ export function PatientsView({ onPrivacyLockChange }) {
     } catch (e) {
       console.error("Error al guardar paciente:", e);
     }
-  };
+  }
 
   if (loading) {
     return (
@@ -960,13 +1125,14 @@ export function PatientsView({ onPrivacyLockChange }) {
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                Administra pacientes, consulta historial y registra información clínica con expediente y sesiones.
+                Administra pacientes, consulta historial y registra información clínica general del expediente.
               </p>
             </div>
 
             <div className="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
               <div className="relative min-w-0 sm:min-w-[320px]">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
                 <input
                   type="text"
                   placeholder="Buscar paciente..."
@@ -975,14 +1141,22 @@ export function PatientsView({ onPrivacyLockChange }) {
                   onChange={(e) => {
                     const next = e.target.value;
                     setSearch(next);
+
                     const current = readPatientsSidebarFilters();
-                    const merged = { ...current, search: next };
+                    const merged = {
+                      ...current,
+                      search: next,
+                    };
+
                     localStorage.setItem(
                       PATIENTS_SIDEBAR_STORAGE_KEY,
                       JSON.stringify(merged)
                     );
+
                     window.dispatchEvent(
-                      new CustomEvent("patients:filters:sync", { detail: merged })
+                      new CustomEvent("patients:filters:sync", {
+                        detail: merged,
+                      })
                     );
                   }}
                 />
@@ -1000,10 +1174,33 @@ export function PatientsView({ onPrivacyLockChange }) {
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard icon={UserRound} label="Total pacientes" value={stats.total} tone="neutral" />
-          <StatCard icon={Activity} label="En tratamiento" value={stats.enTratamiento} tone="amber" />
-          <StatCard icon={ShieldCheck} label="Dados de alta" value={stats.alta} tone="emerald" />
-          <StatCard icon={CalendarDays} label="Con citas registradas" value={stats.conCitas} tone="sky" />
+          <StatCard
+            icon={UserRound}
+            label="Total pacientes"
+            value={stats.total}
+            tone="neutral"
+          />
+
+          <StatCard
+            icon={Activity}
+            label="En tratamiento"
+            value={stats.enTratamiento}
+            tone="amber"
+          />
+
+          <StatCard
+            icon={ShieldCheck}
+            label="Dados de alta"
+            value={stats.alta}
+            tone="emerald"
+          />
+
+          <StatCard
+            icon={ClipboardList}
+            label="Con historial clínico"
+            value={stats.conHistorial}
+            tone="sky"
+          />
         </div>
 
         <div className="mt-4 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
@@ -1012,14 +1209,16 @@ export function PatientsView({ onPrivacyLockChange }) {
               <div className="text-sm font-extrabold text-slate-900">
                 Listado de pacientes
               </div>
+
               <div className="text-xs text-slate-500">
-                Mostrando <b>{filteredPatients.length}</b> de <b>{patients.length}</b> registros
+                Mostrando <b>{filteredPatients.length}</b> de{" "}
+                <b>{patients.length}</b> registros
               </div>
             </div>
 
             <div className="hidden items-center gap-2 text-xs text-slate-500 sm:flex">
               <FileText className="h-4 w-4" />
-              Integrado con expediente y sesiones clínicas
+              Integrado con expediente clínico general
             </div>
           </div>
 
@@ -1032,23 +1231,32 @@ export function PatientsView({ onPrivacyLockChange }) {
                   <th className="px-6 py-4 font-semibold">Último servicio</th>
                   <th className="px-6 py-4 font-semibold">Edad</th>
                   <th className="px-6 py-4 font-semibold">Estado</th>
-                  <th className="px-6 py-4 font-semibold text-right">Acciones</th>
+                  <th className="px-6 py-4 font-semibold text-right">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
+
               <tbody>
                 {filteredPatients.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50/80">
+                  <tr
+                    key={p.id}
+                    className="border-b border-slate-100 hover:bg-slate-50/80"
+                  >
                     <td className="px-6 py-4">
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white font-extrabold text-slate-900">
                           {initialsFromPatient(p)}
                         </div>
+
                         <div className="min-w-0">
                           <div className="truncate font-extrabold text-slate-900">
                             {p.fullNameDisplay}
                           </div>
+
                           <div className="truncate text-xs text-slate-500">
-                            {p.genero || "—"} • Registrado: {p.registro ? formatDateMX(p.registro) : "—"}
+                            {p.genero || "—"} • Registrado:{" "}
+                            {p.registro ? formatDateMX(p.registro) : "—"}
                           </div>
                         </div>
                       </div>
@@ -1056,18 +1264,24 @@ export function PatientsView({ onPrivacyLockChange }) {
 
                     <td className="px-6 py-4">
                       <div className="text-slate-900">{p.telefono || "—"}</div>
-                      <div className="text-xs text-slate-500">{p.correo || "—"}</div>
+                      <div className="text-xs text-slate-500">
+                        {p.correo || "—"}
+                      </div>
                     </td>
 
-                    <td className="px-6 py-4 text-slate-700">{p.lastServiceName || "—"}</td>
+                    <td className="px-6 py-4 text-slate-700">
+                      {p.lastServiceName || "—"}
+                    </td>
 
-                    <td className="px-6 py-4 text-slate-700">{calcEdad(p.fecha_nac)}</td>
+                    <td className="px-6 py-4 text-slate-700">
+                      {calcEdad(p.fecha_nac)}
+                    </td>
 
                     <td className="px-6 py-4">
                       <span
                         className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ${p.estado_tratamiento === "alta"
-                          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                          : "bg-amber-50 text-amber-700 ring-amber-200"
+                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                            : "bg-amber-50 text-amber-700 ring-amber-200"
                           }`}
                       >
                         {estadoTratamientoLabel(p.estado_tratamiento)}
@@ -1076,8 +1290,24 @@ export function PatientsView({ onPrivacyLockChange }) {
 
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-2">
-                        <ActionButton icon={ClipboardList} label="Historial clínico" onClick={() => handleOpenHistory(p)} />
-                        <ActionButton icon={Pencil} label="Ver / Editar" onClick={() => handleOpenEdit(p)} />
+                        <ActionButton
+                          icon={Eye}
+                          label="Ver expediente"
+                          onClick={() => handleOpenProfile(p)}
+                        />
+
+                        <ActionButton
+                          icon={ClipboardList}
+                          label="Historial clínico"
+                          onClick={() => handleOpenHistory(p)}
+                        />
+
+                        <ActionButton
+                          icon={Pencil}
+                          label="Editar"
+                          onClick={() => handleOpenEdit(p)}
+                        />
+
                         <ActionButton
                           icon={Trash2}
                           label="Eliminar"
@@ -1091,7 +1321,10 @@ export function PatientsView({ onPrivacyLockChange }) {
 
                 {filteredPatients.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-sm text-slate-500">
+                    <td
+                      colSpan={6}
+                      className="px-6 py-10 text-center text-sm text-slate-500"
+                    >
                       No se encontraron pacientes con ese criterio.
                     </td>
                   </tr>
@@ -1107,16 +1340,21 @@ export function PatientsView({ onPrivacyLockChange }) {
               </div>
             ) : (
               filteredPatients.map((p) => (
-                <div key={p.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div
+                  key={p.id}
+                  className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="grid h-11 w-11 place-items-center rounded-2xl border border-slate-200 bg-white font-extrabold text-slate-900">
                         {initialsFromPatient(p)}
                       </div>
+
                       <div className="min-w-0">
                         <div className="truncate font-extrabold text-slate-900">
                           {p.fullNameDisplay}
                         </div>
+
                         <div className="truncate text-xs text-slate-500">
                           {p.telefono || "—"} • {p.correo || "—"}
                         </div>
@@ -1125,8 +1363,8 @@ export function PatientsView({ onPrivacyLockChange }) {
 
                     <span
                       className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ring-1 ${p.estado_tratamiento === "alta"
-                        ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                        : "bg-amber-50 text-amber-700 ring-amber-200"
+                          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                          : "bg-amber-50 text-amber-700 ring-amber-200"
                         }`}
                     >
                       {p.estado_tratamiento === "alta" ? "Alta" : "Tratamiento"}
@@ -1135,25 +1373,31 @@ export function PatientsView({ onPrivacyLockChange }) {
 
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <MiniInfo label="Edad" value={calcEdad(p.fecha_nac)} />
-                    <MiniInfo label="Último servicio" value={p.lastServiceName || "—"} />
+                    <MiniInfo
+                      label="Último servicio"
+                      value={p.lastServiceName || "—"}
+                    />
                   </div>
 
-                  <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <MobileActionButton
                       icon={Eye}
                       label="Ver expediente"
                       onClick={() => handleOpenProfile(p)}
                     />
+
                     <MobileActionButton
                       icon={ClipboardList}
                       label="Historial clínico"
                       onClick={() => handleOpenHistory(p)}
                     />
+
                     <MobileActionButton
                       icon={Pencil}
                       label="Editar"
                       onClick={() => handleOpenEdit(p)}
                     />
+
                     <MobileActionButton
                       icon={Trash2}
                       label="Eliminar"
@@ -1209,26 +1453,41 @@ export function PatientsView({ onPrivacyLockChange }) {
       <ClinicalNoteModal
         open={noteModal.open}
         data={noteModal.data}
-        payload={noteModal.payload}
-        onClose={() => {
-          setNoteModal({ open: false, payload: null, data: null });
-        }}
+        onClose={() =>
+          setNoteModal({
+            open: false,
+            payload: null,
+            data: null,
+          })
+        }
         onSaved={async () => {
-          setNoteModal({ open: false, payload: null, data: null });
+          setNoteModal({
+            open: false,
+            payload: null,
+            data: null,
+          });
           await loadAll();
         }}
-        onEnsureSession={ensureSessionForCita}
+        onEnsureSession={ensureSessionForPatient}
       />
 
       <PrescriptionModal
         open={rxModal.open}
         data={rxModal.data}
         payload={rxModal.payload}
-        onClose={() => {
-          setRxModal({ open: false, payload: null, data: null });
-        }}
+        onClose={() =>
+          setRxModal({
+            open: false,
+            payload: null,
+            data: null,
+          })
+        }
         onSaved={async () => {
-          setRxModal({ open: false, payload: null, data: null });
+          setRxModal({
+            open: false,
+            payload: null,
+            data: null,
+          });
           await loadAll();
         }}
       />
@@ -1237,18 +1496,26 @@ export function PatientsView({ onPrivacyLockChange }) {
         open={evidenceModal.open}
         items={evidenceModal.items}
         payload={evidenceModal.payload}
-        onClose={() => {
-          setEvidenceModal({ open: false, payload: null, items: [] });
-        }}
+        onClose={() =>
+          setEvidenceModal({
+            open: false,
+            payload: null,
+            items: [],
+          })
+        }
         onUploaded={async () => {
-          if (!evidenceModal.payload?.citaId) return;
+          const patientId = evidenceModal.payload?.patient?.id;
+          if (!patientId) return;
+
           const data = await fetchJsonAuth(
-            `${API_BASE}/api/evidencias-clinicas/?cita=${evidenceModal.payload.citaId}`
+            `${API_BASE}/api/evidencias-clinicas/?paciente=${patientId}`
           );
+
           setEvidenceModal((prev) => ({
             ...prev,
             items: Array.isArray(data) ? data : [],
           }));
+
           await loadAll();
         }}
       />
@@ -1269,8 +1536,11 @@ function StatCard({ icon: Icon, label, value, tone = "neutral" }) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-xs text-slate-500">{label}</div>
-          <div className="mt-1 text-2xl font-black text-slate-900">{value}</div>
+          <div className="mt-1 text-2xl font-black text-slate-900">
+            {value}
+          </div>
         </div>
+
         <div className="grid h-11 w-11 place-items-center rounded-2xl border border-white/70 bg-white/80 text-slate-700">
           <Icon className="h-5 w-5" />
         </div>
@@ -1319,26 +1589,11 @@ function MiniInfo({ label, value }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
       <div className="text-[11px] text-slate-500">{label}</div>
-      <div className="truncate text-sm font-semibold text-slate-900">{value}</div>
+      <div className="truncate text-sm font-semibold text-slate-900">
+        {value || "—"}
+      </div>
     </div>
   );
-}
-
-function formatDateForHeader(value) {
-  if (!value) return "—";
-  const [y, m, d] = String(value).split("-");
-  if (!y || !m || !d) return value;
-  return `${d}/${m}/${y}`;
-}
-
-function previewTypeFromItem(item) {
-  if (item?.tipo_archivo === "imagen") return "imagen";
-  if (item?.tipo_archivo === "pdf") return "pdf";
-
-  const url = String(getEvidenceFileUrl(item) || "").toLowerCase();
-  if (/\.(jpg|jpeg|png|webp)(\?|$)/.test(url)) return "imagen";
-  if (/\.pdf(\?|$)/.test(url)) return "pdf";
-  return "otro";
 }
 
 function PortalOverlay({ children }) {
@@ -1350,6 +1605,7 @@ function SimpleOverlay({ children, onClose, maxWidth = "max-w-4xl" }) {
     <PortalOverlay>
       <div className="fixed inset-0 z-[1800] overflow-y-auto bg-slate-950/60 p-3 sm:p-6">
         <div className="fixed inset-0" onClick={onClose} />
+
         <div className="relative flex min-h-full items-start justify-center sm:items-center">
           <div
             className={`relative z-10 my-2 flex w-full ${maxWidth} max-h-[calc(100dvh-1rem)] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl sm:my-6 sm:max-h-[calc(100dvh-3rem)]`}
@@ -1362,8 +1618,7 @@ function SimpleOverlay({ children, onClose, maxWidth = "max-w-4xl" }) {
   );
 }
 
-
-function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSession }) {
+function ClinicalNoteModal({ open, data, onClose, onSaved, onEnsureSession }) {
   const [form, setForm] = useState(data || {});
 
   useEffect(() => {
@@ -1372,10 +1627,12 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
 
   if (!open) return null;
 
-  const tipoNota = form.tipo_nota || "evolucion";
+  const tipoNota = form.tipo_nota || "historia_clinica";
   const contenido = form.contenido_nom004 || {};
   const isEdit = !!form?.id;
-  const painLabels = getPainLabels(Array.isArray(form.zonas_dolor) ? form.zonas_dolor : []);
+  const painLabels = getPainLabels(
+    Array.isArray(form.zonas_dolor) ? form.zonas_dolor : []
+  );
 
   function updateContenido(campo, value) {
     setForm((prev) => ({
@@ -1397,16 +1654,16 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
 
   async function save() {
     const token = localStorage.getItem("auth.access");
-    const cita = payload?.cita || null;
     const legacy = getLegacySoapFromNom004(tipoNota, contenido);
 
     const sessionSaved = await onEnsureSession?.({
-      cita,
       patientId: form.paciente,
       form: {
         ...form,
         diagnostico_resumen:
-          contenido.diagnosticos_problemas || contenido.impresion_diagnostica || "",
+          contenido.diagnosticos_problemas ||
+          contenido.impresion_diagnostica ||
+          "",
         recomendaciones_resumen:
           contenido.indicacion_terapeutica ||
           contenido.tratamiento_indicaciones ||
@@ -1416,17 +1673,11 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
       },
     });
 
-    if (!sessionSaved?.id) {
-      console.error("No se pudo garantizar la sesión clínica ligada a la cita.");
-      alert("No se pudo enlazar la nota clínica a una sesión clínica válida.");
-      return;
-    }
-
     const notePayload = {
       paciente: form.paciente,
-      cita: form.cita || payload?.citaId || null,
-      sesion_clinica: sessionSaved.id,
-      fecha: form.fecha || cita?.fecha || new Date().toISOString().slice(0, 10),
+      cita: form.cita || null,
+      sesion_clinica: sessionSaved?.id || form.sesion_clinica || null,
+      fecha: form.fecha || new Date().toISOString().slice(0, 10),
       tipo_nota: tipoNota,
       contenido_nom004: contenido,
       subjetivo: legacy.subjetivo,
@@ -1439,6 +1690,7 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
     const url = isEdit
       ? `${API_BASE}/api/notas-clinicas/${form.id}/`
       : `${API_BASE}/api/notas-clinicas/`;
+
     const method = isEdit ? "PATCH" : "POST";
 
     const resp = await fetch(url, {
@@ -1453,12 +1705,21 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
     const saved = await resp.json().catch(() => null);
 
     if (!resp.ok) {
-      console.error("Error guardando nota clínica:", saved || resp.status);
-      alert("No se pudo guardar la nota clínica. Revisa la consola del backend y valida migraciones.");
+      console.error("Error guardando nota clínica general:", saved || resp.status);
+      alert(
+        "No se pudo guardar la nota clínica. Revisa consola y migraciones del backend."
+      );
       return;
     }
 
-    setForm((prev) => ({ ...prev, ...saved, id: saved.id, sesion_clinica: sessionSaved.id }));
+    setForm((prev) => ({
+      ...prev,
+      ...saved,
+      id: saved.id,
+      sesion_clinica: sessionSaved?.id || saved.sesion_clinica || null,
+    }));
+
+    await onSaved?.();
   }
 
   const camposPorTipo = {
@@ -1466,11 +1727,23 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
       ["ficha_identificacion", "Ficha de identificación"],
       ["grupo_etnico", "Grupo étnico (si aplica)"],
       ["antecedentes_heredo_familiares", "Antecedentes heredo-familiares"],
-      ["antecedentes_personales_patologicos", "Antecedentes personales patológicos"],
-      ["antecedentes_personales_no_patologicos", "Antecedentes personales no patológicos"],
-      ["consumo_sustancias_psicoactivas", "Uso y dependencia de tabaco, alcohol u otras sustancias"],
+      [
+        "antecedentes_personales_patologicos",
+        "Antecedentes personales patológicos",
+      ],
+      [
+        "antecedentes_personales_no_patologicos",
+        "Antecedentes personales no patológicos",
+      ],
+      [
+        "consumo_sustancias_psicoactivas",
+        "Uso y dependencia de tabaco, alcohol u otras sustancias",
+      ],
       ["padecimiento_actual", "Padecimiento actual y tratamientos previos"],
-      ["interrogatorio_aparatos_sistemas", "Interrogatorio por aparatos y sistemas"],
+      [
+        "interrogatorio_aparatos_sistemas",
+        "Interrogatorio por aparatos y sistemas",
+      ],
       ["habitus_exterior", "Habitus exterior"],
       ["signos_vitales", "Signos vitales"],
       ["peso_talla", "Peso y talla"],
@@ -1491,7 +1764,10 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
     interconsulta: [
       ["criterios_diagnosticos", "Criterios diagnósticos"],
       ["plan_estudios", "Plan de estudios"],
-      ["sugerencias_diagnosticas_tratamiento", "Sugerencias diagnósticas y tratamiento"],
+      [
+        "sugerencias_diagnosticas_tratamiento",
+        "Sugerencias diagnósticas y tratamiento",
+      ],
       ["notas_complementarias", "Datos complementarios"],
     ],
     referencia_traslado: [
@@ -1510,22 +1786,22 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="text-lg font-black text-slate-900">
-              {isEdit ? "Ver / editar nota clínica NOM-004" : "Agregar nota clínica NOM-004"}
+              {isEdit
+                ? "Ver / editar nota clínica NOM-004"
+                : "Agregar nota clínica NOM-004"}
             </div>
+
             <div className="mt-1 text-sm text-slate-500">
-              La nota se guarda ligada a la cita y soporta historia clínica, evolución, interconsulta y referencia/traslado.
+              La nota se guarda en el expediente general del paciente. La cita es opcional y solo se conserva si viene de un registro anterior.
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              <div className="font-semibold text-slate-900">Paciente</div>
-              <div>{form.paciente_nombre || "—"}</div>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              <div className="font-semibold text-slate-900">Fecha de la nota</div>
-              <div>{formatDateForHeader(form.fecha)}</div>
-            </div>
+            <MiniInfo label="Paciente" value={form.paciente_nombre || "—"} />
+            <MiniInfo
+              label="Fecha de la nota"
+              value={formatDateForHeader(form.fecha)}
+            />
           </div>
         </div>
       </div>
@@ -1537,6 +1813,7 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
               <label className="mb-1.5 block text-sm font-semibold text-slate-900">
                 Tipo de nota
               </label>
+
               <select
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                 value={tipoNota}
@@ -1545,7 +1822,9 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
                 <option value="historia_clinica">Historia clínica</option>
                 <option value="evolucion">Nota de evolución</option>
                 <option value="interconsulta">Nota de interconsulta</option>
-                <option value="referencia_traslado">Nota de referencia / traslado</option>
+                <option value="referencia_traslado">
+                  Nota de referencia / traslado
+                </option>
               </select>
 
               <div className="mt-4 space-y-4">
@@ -1553,12 +1832,16 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
                   <label className="mb-1.5 block text-sm font-semibold text-slate-900">
                     Motivo de consulta
                   </label>
+
                   <textarea
                     rows={3}
                     className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                     value={form.motivo_consulta || ""}
                     onChange={(e) =>
-                      setForm((prev) => ({ ...prev, motivo_consulta: e.target.value }))
+                      setForm((prev) => ({
+                        ...prev,
+                        motivo_consulta: e.target.value,
+                      }))
                     }
                     placeholder="Motivo principal de la atención"
                   />
@@ -1566,14 +1849,18 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
 
                 <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                   <div className="mb-1.5 text-sm font-semibold text-slate-900">
-                    Zonas de dolor registradas en la cita
+                    Zonas de dolor registradas en el expediente
                   </div>
+
                   <div className="text-xs text-slate-500">
-                    Para la nota clínica ya no se muestra el modelo 3D. Aquí solo se visualizan las zonas previamente capturadas.
+                    Aquí solo se visualizan las zonas previamente capturadas.
                   </div>
+
                   <div className="mt-3 flex flex-wrap gap-2">
                     {painLabels.length === 0 ? (
-                      <span className="text-sm text-slate-500">Sin zonas seleccionadas.</span>
+                      <span className="text-sm text-slate-500">
+                        Sin zonas seleccionadas.
+                      </span>
                     ) : (
                       painLabels.map((label, i) => (
                         <span
@@ -1596,8 +1883,14 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
                 <label className="mb-1.5 block text-sm font-semibold text-slate-900">
                   {label}
                 </label>
+
                 <textarea
-                  rows={campo.includes("signos_vitales") || campo.includes("peso_talla") ? 2 : 4}
+                  rows={
+                    campo.includes("signos_vitales") ||
+                      campo.includes("peso_talla")
+                      ? 2
+                      : 4
+                  }
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                   value={contenido[campo] || ""}
                   onChange={(e) => updateContenido(campo, e.target.value)}
@@ -1616,41 +1909,40 @@ function ClinicalNoteModal({ open, data, payload, onClose, onSaved, onEnsureSess
           >
             Cerrar
           </button>
+
           {form.id ? (
             <>
               <button
-                onClick={async () => {
-                  try {
-                    await openProtectedBinary(`${API_BASE}/api/notas-clinicas/${form.id}/pdf/?inline=1`, {
+                onClick={() =>
+                  openProtectedBinary(
+                    `${API_BASE}/api/notas-clinicas/${form.id}/pdf/?inline=1`,
+                    {
                       filename: `nota_clinica_${form.id}.pdf`,
-                    });
-                  } catch (error) {
-                    console.error(error);
-                    alert(error.message || "No se pudo visualizar la nota clínica.");
-                  }
-                }}
+                    }
+                  ).catch((e) => alert(e.message))
+                }
                 className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
               >
                 Visualizar nota
               </button>
+
               <button
-                onClick={async () => {
-                  try {
-                    await openProtectedBinary(`${API_BASE}/api/notas-clinicas/${form.id}/pdf/`, {
+                onClick={() =>
+                  openProtectedBinary(
+                    `${API_BASE}/api/notas-clinicas/${form.id}/pdf/`,
+                    {
                       filename: `nota_clinica_${form.id}.pdf`,
                       download: true,
-                    });
-                  } catch (error) {
-                    console.error(error);
-                    alert(error.message || "No se pudo generar el PDF de la nota clínica.");
-                  }
-                }}
+                    }
+                  ).catch((e) => alert(e.message))
+                }
                 className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
               >
                 Generar PDF
               </button>
             </>
           ) : null}
+
           <button
             onClick={save}
             className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white"
@@ -1675,8 +1967,14 @@ function PrescriptionModal({ open, data, payload, onClose, onSaved }) {
   function updateMed(index, key, value) {
     setForm((prev) => {
       const meds = [...(prev.medicamentos || [])];
-      meds[index] = { ...(meds[index] || {}), [key]: value };
-      return { ...prev, medicamentos: meds };
+      meds[index] = {
+        ...(meds[index] || {}),
+        [key]: value,
+      };
+      return {
+        ...prev,
+        medicamentos: meds,
+      };
     });
   }
 
@@ -1707,15 +2005,17 @@ function PrescriptionModal({ open, data, payload, onClose, onSaved }) {
   async function save() {
     const token = localStorage.getItem("auth.access");
     const isEdit = !!form.id;
+
     const url = isEdit
       ? `${API_BASE}/api/recetas-medicas/${form.id}/`
       : `${API_BASE}/api/recetas-medicas/`;
+
     const method = isEdit ? "PATCH" : "POST";
 
     const payloadSave = {
       paciente: form.paciente,
-      cita: form.cita,
-      fecha: form.fecha,
+      cita: form.cita || null,
+      fecha: form.fecha || new Date().toISOString().slice(0, 10),
       diagnostico: form.diagnostico || "",
       indicaciones_generales: form.indicaciones_generales || "",
       medicamentos: (form.medicamentos || []).filter(
@@ -1738,20 +2038,27 @@ function PrescriptionModal({ open, data, payload, onClose, onSaved }) {
     const dataResp = await resp.json().catch(() => null);
 
     if (!resp.ok) {
-      console.error("Error guardando receta:", dataResp || resp.status);
-      alert("No se pudo guardar la receta. Revisa el backend y valida migraciones si agregaste nuevos campos.");
+      console.error("Error guardando receta general:", dataResp || resp.status);
+      alert("No se pudo guardar la receta médica. Revisa el backend y las migraciones.");
       return;
     }
 
-    setForm((prev) => ({ ...prev, ...dataResp, id: dataResp.id }));
+    setForm((prev) => ({
+      ...prev,
+      ...dataResp,
+      id: dataResp.id,
+    }));
+
+    await onSaved?.();
   }
 
   return (
     <SimpleOverlay onClose={onClose} maxWidth="max-w-6xl">
       <div className="shrink-0 border-b border-slate-200 p-4 sm:p-5">
         <div className="text-lg font-black text-slate-900">Receta médica</div>
+
         <div className="mt-1 text-sm text-slate-500">
-          Se autocompletan paciente, edad, fecha de nacimiento, fecha de receta y profesional tratante.
+          La receta se guarda directamente en el expediente general del paciente.
         </div>
       </div>
 
@@ -1759,47 +2066,62 @@ function PrescriptionModal({ open, data, payload, onClose, onSaved }) {
         <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             <MiniInfo label="Paciente" value={form.paciente_nombre || "—"} />
-            <MiniInfo label="Fecha de receta" value={formatDateForHeader(form.fecha)} />
+            <MiniInfo
+              label="Fecha de receta"
+              value={formatDateForHeader(form.fecha)}
+            />
             <MiniInfo label="Edad" value={calcEdad(form.paciente_fecha_nac)} />
-            <MiniInfo label="Fecha de nacimiento" value={formatDateForHeader(form.paciente_fecha_nac)} />
-            <MiniInfo label="Doctor" value={form.profesional_nombre || payload?.cita?.profesional_nombre || "—"} />
-            <MiniInfo label="Cédula profesional" value={form.profesional_cedula || "Captúrala en el perfil del profesional"} />
+            <MiniInfo
+              label="Fecha de nacimiento"
+              value={formatDateForHeader(form.paciente_fecha_nac)}
+            />
+            <MiniInfo
+              label="Profesional"
+              value={
+                form.profesional_nombre ||
+                payload?.session?.profesional_nombre ||
+                "—"
+              }
+            />
+            <MiniInfo
+              label="Cédula profesional"
+              value={
+                form.profesional_cedula ||
+                "Captúrala en el perfil del profesional"
+              }
+            />
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-900">
-                Diagnóstico
-              </label>
-              <textarea
-                rows={3}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
-                value={form.diagnostico || ""}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, diagnostico: e.target.value }))
-                }
-              />
-            </div>
+            <FieldTextArea
+              label="Diagnóstico"
+              rows={3}
+              value={form.diagnostico || ""}
+              onChange={(v) =>
+                setForm((prev) => ({
+                  ...prev,
+                  diagnostico: v,
+                }))
+              }
+            />
 
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-900">
-                Indicaciones generales
-              </label>
-              <textarea
-                rows={4}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
-                value={form.indicaciones_generales || ""}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    indicaciones_generales: e.target.value,
-                  }))
-                }
-              />
-            </div>
+            <FieldTextArea
+              label="Indicaciones generales"
+              rows={4}
+              value={form.indicaciones_generales || ""}
+              onChange={(v) =>
+                setForm((prev) => ({
+                  ...prev,
+                  indicaciones_generales: v,
+                }))
+              }
+            />
 
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-black text-slate-900">Medicamentos recetados</div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-black text-slate-900">
+                Medicamentos recetados
+              </div>
+
               <button
                 type="button"
                 onClick={addMed}
@@ -1819,6 +2141,7 @@ function PrescriptionModal({ open, data, payload, onClose, onSaved }) {
                     <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
                       Medicamento #{index + 1}
                     </div>
+
                     <button
                       type="button"
                       onClick={() => removeMed(index)}
@@ -1830,42 +2153,46 @@ function PrescriptionModal({ open, data, payload, onClose, onSaved }) {
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                    <input
-                      className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                      placeholder="Nombre del medicamento"
+                    <Input
                       value={med.nombre || ""}
-                      onChange={(e) => updateMed(index, "nombre", e.target.value)}
+                      placeholder="Nombre del medicamento"
+                      onChange={(v) => updateMed(index, "nombre", v)}
                     />
-                    <input
-                      className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                      placeholder="Dosis"
+
+                    <Input
                       value={med.dosis || ""}
-                      onChange={(e) => updateMed(index, "dosis", e.target.value)}
+                      placeholder="Dosis"
+                      onChange={(v) => updateMed(index, "dosis", v)}
                     />
-                    <input
-                      className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                      placeholder="Vía de administración"
+
+                    <Input
                       value={med.via_administracion || ""}
-                      onChange={(e) => updateMed(index, "via_administracion", e.target.value)}
+                      placeholder="Vía de administración"
+                      onChange={(v) =>
+                        updateMed(index, "via_administracion", v)
+                      }
                     />
-                    <input
-                      className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                      placeholder="Cada cuánto tomarlo"
+
+                    <Input
                       value={med.frecuencia || ""}
-                      onChange={(e) => updateMed(index, "frecuencia", e.target.value)}
+                      placeholder="Cada cuánto tomarlo"
+                      onChange={(v) => updateMed(index, "frecuencia", v)}
                     />
-                    <input
-                      className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
-                      placeholder="Duración"
+
+                    <Input
                       value={med.duracion || ""}
-                      onChange={(e) => updateMed(index, "duracion", e.target.value)}
+                      placeholder="Duración"
+                      onChange={(v) => updateMed(index, "duracion", v)}
                     />
+
                     <textarea
-                      className="rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                      className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                       rows={2}
                       placeholder="Notas"
                       value={med.notas || ""}
-                      onChange={(e) => updateMed(index, "notas", e.target.value)}
+                      onChange={(e) =>
+                        updateMed(index, "notas", e.target.value)
+                      }
                     />
                   </div>
                 </div>
@@ -1889,41 +2216,40 @@ function PrescriptionModal({ open, data, payload, onClose, onSaved }) {
           >
             Cerrar
           </button>
+
           {form.id ? (
             <>
               <button
-                onClick={async () => {
-                  try {
-                    await openProtectedBinary(`${API_BASE}/api/recetas-medicas/${form.id}/pdf/?inline=1`, {
+                onClick={() =>
+                  openProtectedBinary(
+                    `${API_BASE}/api/recetas-medicas/${form.id}/pdf/?inline=1`,
+                    {
                       filename: `receta_medica_${form.id}.pdf`,
-                    });
-                  } catch (error) {
-                    console.error(error);
-                    alert(error.message || "No se pudo visualizar la receta.");
-                  }
-                }}
+                    }
+                  ).catch((e) => alert(e.message))
+                }
                 className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
               >
                 Visualizar receta
               </button>
+
               <button
-                onClick={async () => {
-                  try {
-                    await openProtectedBinary(`${API_BASE}/api/recetas-medicas/${form.id}/pdf/`, {
+                onClick={() =>
+                  openProtectedBinary(
+                    `${API_BASE}/api/recetas-medicas/${form.id}/pdf/`,
+                    {
                       filename: `receta_medica_${form.id}.pdf`,
                       download: true,
-                    });
-                  } catch (error) {
-                    console.error(error);
-                    alert(error.message || "No se pudo generar el PDF de la receta.");
-                  }
-                }}
+                    }
+                  ).catch((e) => alert(e.message))
+                }
                 className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
               >
                 Generar PDF
               </button>
             </>
           ) : null}
+
           <button
             onClick={save}
             className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white"
@@ -1951,9 +2277,7 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
     const blobUrl = URL.createObjectURL(archivo);
     setLocalPreviewUrl(blobUrl);
 
-    return () => {
-      URL.revokeObjectURL(blobUrl);
-    };
+    return () => URL.revokeObjectURL(blobUrl);
   }, [archivo]);
 
   useEffect(() => {
@@ -1968,7 +2292,7 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
   if (!open) return null;
 
   async function upload() {
-    if (!archivo || !payload?.citaId) {
+    if (!archivo || !payload?.patient?.id) {
       alert("Selecciona un archivo antes de subir la evidencia.");
       return;
     }
@@ -1977,10 +2301,15 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
     const fd = new FormData();
 
     fd.append("paciente", payload.patient.id);
-    fd.append("cita", payload.citaId);
+
+    if (payload?.citaId) {
+      fd.append("cita", payload.citaId);
+    }
+
     if (payload.session?.id) {
       fd.append("sesion_clinica", payload.session.id);
     }
+
     fd.append("titulo", titulo);
     fd.append("descripcion", descripcion);
     fd.append("archivo", archivo);
@@ -1996,7 +2325,7 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
     const dataResp = await resp.json().catch(() => null);
 
     if (!resp.ok) {
-      console.error("Error subiendo evidencia:", dataResp || resp.status);
+      console.error("Error subiendo evidencia general:", dataResp || resp.status);
       alert(dataResp?.detail || "No se pudo subir la evidencia.");
       return;
     }
@@ -2005,13 +2334,20 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
     setDescripcion("");
     setArchivo(null);
     setLocalPreviewUrl("");
+
     onUploaded?.();
   }
 
   return (
     <SimpleOverlay onClose={onClose} maxWidth="max-w-6xl">
       <div className="shrink-0 border-b border-slate-200 p-4 sm:p-5">
-        <div className="text-lg font-black text-slate-900">Evidencias clínicas</div>
+        <div className="text-lg font-black text-slate-900">
+          Evidencias clínicas del expediente
+        </div>
+
+        <div className="mt-1 text-sm text-slate-500">
+          Los archivos se guardan directamente en el expediente general del paciente.
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
@@ -2021,8 +2357,9 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
               <label className="mb-1 block text-sm font-semibold text-slate-900">
                 Título
               </label>
+
               <input
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                 value={titulo}
                 onChange={(e) => setTitulo(e.target.value)}
                 placeholder="Ej. Radiografía AP, evolución 2 semanas..."
@@ -2033,8 +2370,9 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
               <label className="mb-1 block text-sm font-semibold text-slate-900">
                 Descripción
               </label>
+
               <textarea
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm"
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                 rows={4}
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
@@ -2043,7 +2381,9 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
             </div>
 
             <div>
-              <div className="mb-2 text-sm font-semibold text-slate-900">Archivo</div>
+              <div className="mb-2 text-sm font-semibold text-slate-900">
+                Archivo
+              </div>
 
               <input
                 id="evidencia-clinica-input"
@@ -2065,6 +2405,7 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
                   <span className="block text-sm font-semibold text-slate-900">
                     {archivo ? "Cambiar archivo" : "Agregar evidencia"}
                   </span>
+
                   <span className="block text-xs text-slate-500">
                     JPG, PNG, WEBP o PDF
                   </span>
@@ -2072,7 +2413,9 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
               </label>
 
               <div className="mt-2 text-xs text-slate-500">
-                {archivo ? `Seleccionado: ${archivo.name}` : "Aún no has seleccionado un archivo."}
+                {archivo
+                  ? `Seleccionado: ${archivo.name}`
+                  : "Aún no has seleccionado un archivo."}
               </div>
             </div>
 
@@ -2082,7 +2425,8 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
                   Vista previa
                 </div>
 
-                {String(archivo.type || "").startsWith("image/") && localPreviewUrl ? (
+                {String(archivo.type || "").startsWith("image/") &&
+                  localPreviewUrl ? (
                   <img
                     src={localPreviewUrl}
                     alt={archivo.name}
@@ -2092,7 +2436,9 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
                   <div className="flex aspect-[4/3] items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
                     <div className="flex flex-col items-center gap-2">
                       <FileText className="h-10 w-10" />
-                      <span className="text-xs font-semibold">PDF listo para subir</span>
+                      <span className="text-xs font-semibold">
+                        PDF listo para subir
+                      </span>
                     </div>
                   </div>
                 ) : null}
@@ -2110,7 +2456,7 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
           <div className="space-y-3">
             {items.length === 0 ? (
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-                Aún no hay evidencias cargadas para esta cita.
+                Aún no hay evidencias cargadas en el expediente del paciente.
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -2122,7 +2468,10 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => fileUrl && window.open(fileUrl, "_blank", "noopener,noreferrer")}
+                      onClick={() =>
+                        fileUrl &&
+                        window.open(fileUrl, "_blank", "noopener,noreferrer")
+                      }
                       className="overflow-hidden rounded-3xl border border-slate-200 bg-white text-left transition hover:bg-slate-50"
                     >
                       <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-slate-100">
@@ -2136,25 +2485,34 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
                         ) : previewType === "pdf" ? (
                           <div className="flex flex-col items-center gap-2 text-slate-500">
                             <FileText className="h-10 w-10" />
-                            <span className="text-xs font-semibold">Vista PDF</span>
+                            <span className="text-xs font-semibold">
+                              Vista PDF
+                            </span>
                           </div>
                         ) : (
                           <div className="flex flex-col items-center gap-2 text-slate-500">
                             <ImageIcon className="h-10 w-10" />
-                            <span className="text-xs font-semibold">Archivo clínico</span>
+                            <span className="text-xs font-semibold">
+                              Archivo clínico
+                            </span>
                           </div>
                         )}
                       </div>
 
                       <div className="space-y-1 p-4">
                         <div className="line-clamp-2 text-sm font-black text-slate-900">
-                          {item.titulo || item.archivo_nombre || "Archivo clínico"}
+                          {item.titulo ||
+                            item.archivo_nombre ||
+                            "Archivo clínico"}
                         </div>
+
                         <div className="line-clamp-2 text-sm text-slate-600">
                           {item.descripcion || "Sin descripción"}
                         </div>
+
                         <div className="pt-1 text-xs font-semibold text-sky-700">
-                          {(item.tipo_archivo || previewType).toUpperCase()} • Abrir en pestaña nueva
+                          {(item.tipo_archivo || previewType).toUpperCase()} •
+                          Abrir en pestaña nueva
                         </div>
                       </div>
                     </button>
@@ -2180,5 +2538,32 @@ function EvidenceModal({ open, items, payload, onClose, onUploaded }) {
   );
 }
 
+function Input({ value, placeholder, onChange }) {
+  return (
+    <input
+      className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
+function FieldTextArea({ label, rows = 3, value, onChange }) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-semibold text-slate-900">
+        {label}
+      </label>
+
+      <textarea
+        rows={rows}
+        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
 
 export default PatientsView;
