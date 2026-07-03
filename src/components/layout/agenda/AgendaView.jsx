@@ -152,7 +152,7 @@ function normalizeRole(value) {
 }
 
 function isDoctorRole(user) {
-  return normalizeRole(user?.rol) === "doctor";
+  return ["doctor", "fisioterapeuta", "aux_fisioterapia"].includes(normalizeRole(user?.rol));
 }
 
 function HoverCard({ open, anchorRect, children }) {
@@ -402,7 +402,19 @@ export function AgendaView({
   const DAY_END_MIN = toMinutes(HOURS[HOURS.length - 1]) + 60;
 
   const HOUR_ROW_HEIGHT = 64;
+  const SLOT_STEP_MINUTES = 30;
+  const SLOT_ROW_HEIGHT = (HOUR_ROW_HEIGHT * SLOT_STEP_MINUTES) / 60;
   const GRID_TOTAL_HEIGHT = HOURS.length * HOUR_ROW_HEIGHT;
+
+  const TIME_SLOTS = useMemo(() => {
+    const slots = [];
+    for (let total = DAY_START_MIN; total < DAY_END_MIN; total += SLOT_STEP_MINUTES) {
+      const hh = String(Math.floor(total / 60)).padStart(2, "0");
+      const mm = String(total % 60).padStart(2, "0");
+      slots.push(`${hh}:${mm}`);
+    }
+    return slots;
+  }, [DAY_START_MIN, DAY_END_MIN]);
 
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const nowY = ((nowMinutes - DAY_START_MIN) / 60) * HOUR_ROW_HEIGHT;
@@ -519,9 +531,9 @@ export function AgendaView({
 
       const [dateIso, proId] = k.split("|");
 
-      for (const hour of HOURS) {
+      for (const hour of TIME_SLOTS) {
         const hourStart = toMinutes(hour);
-        const hourEnd = hourStart + 60;
+        const hourEnd = hourStart + SLOT_STEP_MINUTES;
 
         const covered = blocks.some((b) => {
           const s = toMinutes(b.time);
@@ -534,13 +546,13 @@ export function AgendaView({
     }
 
     return set;
-  }, [dragSourceAppointments, HOURS]);
+  }, [dragSourceAppointments, TIME_SLOTS]);
 
   const findBlockForSlot = useCallback(
     ({ dateIso, professionalId, hour }) => {
       const list = dragSourceAppointments || [];
       const hourStart = toMinutes(hour);
-      const hourEnd = hourStart + 60;
+      const hourEnd = hourStart + SLOT_STEP_MINUTES;
 
       return (
         list.find((a) => {
@@ -554,7 +566,7 @@ export function AgendaView({
         }) || null
       );
     },
-    [dragSourceAppointments]
+    [dragSourceAppointments, SLOT_STEP_MINUTES]
   );
 
   const handleDragStart = (event) => {
@@ -589,7 +601,7 @@ export function AgendaView({
 
     const oldStart = toMinutes(appt.time);
     const oldEnd = toMinutes(appt.endTime || addMinutesToTime(appt.time, 60));
-    const durMin = Math.max(60, oldEnd - oldStart);
+    const durMin = Math.max(30, oldEnd - oldStart);
     const newEndTime = addMinutesToTime(newTime, durMin);
 
     const patch = {
@@ -753,10 +765,10 @@ export function AgendaView({
       .map((a) => {
         const realStart = clamp(toMinutes(a.time), DAY_START_MIN, DAY_END_MIN);
         const realEndRaw = toMinutes(a.endTime || addMinutesToTime(a.time, 60));
-        const realEnd = clamp(Math.max(realEndRaw, realStart + 60), DAY_START_MIN, DAY_END_MIN);
+        const realEnd = clamp(Math.max(realEndRaw, realStart + 30), DAY_START_MIN, DAY_END_MIN);
 
-        const displayStart = clamp(floorToHourMinutes(realStart), DAY_START_MIN, DAY_END_MIN);
-        const displayEnd = clamp(displayStart + 60, DAY_START_MIN, DAY_END_MIN);
+        const displayStart = realStart;
+        const displayEnd = realEnd;
 
         return {
           ...a,
@@ -882,7 +894,7 @@ export function AgendaView({
       .map((b) => {
         const s = clamp(toMinutes(b.time), DAY_START_MIN, DAY_END_MIN);
         const eRaw = toMinutes(b.endTime || addMinutesToTime(b.time, 60));
-        const e = clamp(Math.max(eRaw, s + 60), DAY_START_MIN, DAY_END_MIN);
+        const e = clamp(Math.max(eRaw, s + 30), DAY_START_MIN, DAY_END_MIN);
         return { ...b, __s: s, __e: e };
       })
       .sort((a, b) => a.__s - b.__s);
@@ -915,9 +927,9 @@ export function AgendaView({
       const m = new Map();
       const blocks = (dayItems || []).filter(isBlockItem);
 
-      for (const hour of HOURS) {
+      for (const hour of TIME_SLOTS) {
         const hourStart = toMinutes(hour);
-        const hourEnd = hourStart + 60;
+        const hourEnd = hourStart + SLOT_STEP_MINUTES;
 
         const blk = blocks.find((b) => {
           const s = toMinutes(b.time);
@@ -928,15 +940,15 @@ export function AgendaView({
         m.set(hour, blk || null);
       }
       return m;
-    }, [dayItems, HOURS]);
+    }, [dayItems, TIME_SLOTS]);
 
     const appointmentsByHour = useMemo(() => {
       const m = new Map();
       const appts = (dayItems || []).filter((a) => !isBlockItem(a));
 
-      for (const hour of HOURS) {
+      for (const hour of TIME_SLOTS) {
         const hourStart = toMinutes(hour);
-        const hourEnd = hourStart + 60;
+        const hourEnd = hourStart + SLOT_STEP_MINUTES;
 
         const overlapping = appts.filter((a) => {
           const s = toMinutes(a.time);
@@ -948,7 +960,7 @@ export function AgendaView({
       }
 
       return m;
-    }, [dayItems, HOURS]);
+    }, [dayItems, TIME_SLOTS]);
 
     return (
       <div className="relative">
@@ -962,20 +974,20 @@ export function AgendaView({
               <div className="absolute -left-1 top-1/2 -translate-y-1/2 h-2.5 w-2.5 rounded-full bg-rose-500" />
             </div>
           )}
-          {HOURS.map((_, idx) => (
+          {TIME_SLOTS.map((slot, idx) => (
             <div
-              key={idx}
-              style={{ height: HOUR_ROW_HEIGHT }}
-              className="border-b border-slate-400 border-dashed"
+              key={slot}
+              style={{ height: SLOT_ROW_HEIGHT }}
+              className={idx % 2 === 0 ? "border-b border-slate-300" : "border-b border-slate-100 border-dashed"}
             />
           ))}
         </div>
 
         <div className="relative" style={{ height: GRID_TOTAL_HEIGHT }}>
-          {HOURS.map((hour, idx) => {
-            const y = idx * HOUR_ROW_HEIGHT;
+          {TIME_SLOTS.map((hour) => {
+            const y = ((toMinutes(hour) - DAY_START_MIN) / 60) * HOUR_ROW_HEIGHT;
 
-            const slotId = `slot:${dateIso}:${professionalId}:${hour.slice(0, 2)}:00`;
+            const slotId = `slot:${dateIso}:${professionalId}:${hour.slice(0, 2)}:${hour.slice(3, 5)}`;
             const blockItem = blockedByHour.get(hour);
             const hasBlock = Boolean(blockItem);
             const hasAppointments = (appointmentsByHour.get(hour) || []).length > 0;
@@ -984,7 +996,7 @@ export function AgendaView({
               <div
                 key={slotId}
                 className="absolute left-0 right-0 px-1"
-                style={{ top: y, height: HOUR_ROW_HEIGHT }}
+                style={{ top: y, height: SLOT_ROW_HEIGHT }}
               >
                 <DroppableHourSlot
                   id={slotId}

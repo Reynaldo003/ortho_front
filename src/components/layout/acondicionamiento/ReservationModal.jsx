@@ -15,10 +15,27 @@ import {
 
 const API_BASE = "https://ortho-clinic-cordoba.cloud";
 
-function durationToMinutes(durationStr) {
-  if (!durationStr) return 60;
-  const [h = "0", m = "0", s = "0"] = String(durationStr).split(":");
-  return Number(h) * 60 + Number(m) + Number(s) / 60;
+const APPOINTMENT_DURATION_OPTIONS = [30, 50, 60];
+
+function normalizeAppointmentDurationMinutes(value, fallback = 60) {
+  const n = Number(value);
+  return APPOINTMENT_DURATION_OPTIONS.includes(n) ? n : fallback;
+}
+
+function timeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [h = "0", m = "0"] = String(timeStr).split(":");
+  const hh = Number(h);
+  const mm = Number(m);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  return hh * 60 + mm;
+}
+
+function durationBetweenTimes(startTime, endTime, fallback = 60) {
+  const start = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  if (start == null || end == null || end <= start) return fallback;
+  return normalizeAppointmentDurationMinutes(end - start, fallback);
 }
 
 function getStatusColorClasses(status) {
@@ -203,8 +220,12 @@ export function ReservationModal({
   const isEditing = Boolean(appointment?.id);
   const today = new Date().toISOString().slice(0, 10);
 
-  const isProfessionalRole =
-    role === "fisioterapeuta" || role === "nutriologo" || role === "dentista";
+  const isProfessional = role === "fisioterapeuta";
+  const canSeeAll =
+    role === "admin" ||
+    role === "doctor" ||
+    role === "recepcion" ||
+    role === "recepcionista";
 
   const [services, setServices] = useState([]);
   const [professionals, setProfessionals] = useState([]);
@@ -251,6 +272,11 @@ export function ReservationModal({
   function buildInitialForm({ appointment, preset, today }) {
     const initialDate = appointment?.date ?? preset?.date ?? today;
     const initialTime = appointment?.time ?? preset?.time ?? "08:00";
+    const initialDurationMinutes = durationBetweenTimes(
+      initialTime,
+      appointment?.endTime,
+      normalizeAppointmentDurationMinutes(appointment?.durationMinutes, 60)
+    );
 
     const priceDigits = appointment?.price ? String(Number(appointment.price)) : "";
     const discountDigits = appointment?.discountPct ? String(Number(appointment.discountPct)) : "";
@@ -273,13 +299,14 @@ export function ReservationModal({
 
       date: initialDate,
       time: initialTime,
-      endTime: appointment?.endTime ?? "09:00",
+      durationMinutes: initialDurationMinutes,
+      endTime: appointment?.endTime ?? addMinutesToTime(initialTime, initialDurationMinutes),
 
       serviceId: appointment?.serviceId ?? null,
       professionalId:
         appointment?.professionalId ??
         preset?.professionalId ??
-        (isProfessionalRole ? myUserId : null),
+        (isProfessional ? myUserId : null),
 
       price: priceDigits,
       discountPct: discountDigits,
@@ -327,7 +354,7 @@ export function ReservationModal({
 
         const [servicesResp, profsResp, patientsResp] = await Promise.all([
           fetch(`${API_BASE}/api/servicios/`),
-          fetch(`${API_BASE}/api/profesionales/`, {
+          fetch(`${API_BASE}/api/profesionales/?roles=doctor,fisioterapeuta,aux_fisioterapia`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch(`${API_BASE}/api/pacientes/`, {
@@ -340,8 +367,12 @@ export function ReservationModal({
         const patientsDataRaw = await patientsResp.json();
 
         const servicesData = Array.isArray(servicesDataRaw) ? servicesDataRaw : [];
-        const profsData = Array.isArray(profsDataRaw) ? profsDataRaw : [];
+        let profsData = Array.isArray(profsDataRaw) ? profsDataRaw : [];
         const patientsData = Array.isArray(patientsDataRaw) ? patientsDataRaw : [];
+
+        if (!canSeeAll && isProfessional && myUserId) {
+          profsData = profsData.filter((p) => Number(p.id) === Number(myUserId));
+        }
 
         setServices(servicesData);
         setProfessionals(profsData);
@@ -352,14 +383,12 @@ export function ReservationModal({
           const professionalId =
             prev.professionalId ??
             preset?.professionalId ??
-            (isProfessionalRole && myUserId ? Number(myUserId) : (profsData[0]?.id ?? null));
+            (isProfessional && myUserId ? Number(myUserId) : (profsData[0]?.id ?? null));
 
           const service =
             servicesData.find((s) => s.id === serviceId) || servicesData[0] || null;
 
-          const durationMinutes = service
-            ? durationToMinutes(service.duracion || service.duracion_str || service.duracion_text)
-            : 60;
+          const durationMinutes = normalizeAppointmentDurationMinutes(prev.durationMinutes, 60);
 
           const baseTime = prev.time || "08:00";
           const endTime = addMinutesToTime(baseTime, durationMinutes);
@@ -372,7 +401,7 @@ export function ReservationModal({
 
           const professionalIdFinal = profsData.some((item) => Number(item.id) === Number(professionalId))
             ? professionalId
-            : (isProfessionalRole && myUserId ? Number(myUserId) : (profsData[0]?.id ?? null));
+            : (isProfessional && myUserId ? Number(myUserId) : (profsData[0]?.id ?? null));
 
           return {
             ...prev,
@@ -480,18 +509,27 @@ export function ReservationModal({
     setPatientQuery(form.patient || "");
   }, [form.patient]);
 
-  const getSelectedServiceDurationMinutes = (serviceId) => {
-    const s = (services || []).find((x) => Number(x.id) === Number(serviceId));
-    return s ? durationToMinutes(s.duracion || s.duracion_str || s.duracion_text) : 60;
+  const getSelectedAppointmentDurationMinutes = (value = form.durationMinutes) => {
+    return normalizeAppointmentDurationMinutes(value, 60);
   };
 
   const handleChange = (field, value) => {
     if (field === "time") {
-      const durationMinutes = getSelectedServiceDurationMinutes(form.serviceId);
+      const durationMinutes = getSelectedAppointmentDurationMinutes();
       setForm((prev) => ({
         ...prev,
         time: value,
         endTime: addMinutesToTime(value, durationMinutes),
+      }));
+      return;
+    }
+
+    if (field === "durationMinutes") {
+      const durationMinutes = normalizeAppointmentDurationMinutes(value, 60);
+      setForm((prev) => ({
+        ...prev,
+        durationMinutes,
+        endTime: addMinutesToTime(prev.time, durationMinutes),
       }));
       return;
     }
@@ -509,10 +547,6 @@ export function ReservationModal({
     const serviceId = Number(serviceIdStr);
     const service = services.find((s) => s.id === serviceId);
 
-    const durationMinutes = service
-      ? durationToMinutes(service.duracion || service.duracion_str || service.duracion_text)
-      : 60;
-
     setForm((prev) => {
       const newPrice = service ? Math.max(0, Number(service.precio || 0)) : 0;
 
@@ -521,7 +555,10 @@ export function ReservationModal({
         serviceId,
         price: String(newPrice),
         montoFacturado: String(newPrice),
-        endTime: addMinutesToTime(prev.time, durationMinutes),
+        endTime: addMinutesToTime(
+          prev.time,
+          normalizeAppointmentDurationMinutes(prev.durationMinutes, 60)
+        ),
       };
     });
   };
@@ -884,10 +921,11 @@ export function ReservationModal({
 
       const wasPaidBefore = Boolean(appointment?.paid) || Boolean(appointment?.pagado);
 
-      const durationMinutes = getSelectedServiceDurationMinutes(form.serviceId);
+      const durationMinutes = getSelectedAppointmentDurationMinutes();
       const fixed = {
         ...form,
         agenda_tipo: agendaTipo,
+        durationMinutes,
         endTime: addMinutesToTime(form.time, durationMinutes),
       };
 
@@ -1172,14 +1210,18 @@ export function ReservationModal({
 
                   <div>
                     <label className="text-[11px] font-semibold text-slate-600 block mb-1">Género</label>
-                    <input
-                      type="text"
+                    <select
                       name="genero_no_autofill"
                       autoComplete="off"
-                      className="w-full text-sm rounded-md border border-slate-300 px-3 py-2"
+                      className="w-full text-sm rounded-md border border-slate-300 px-3 py-2 bg-white"
                       value={form.genero}
                       onChange={(e) => handleChange("genero", e.target.value)}
-                    />
+                    >
+                      <option value="">Selecciona género</option>
+                      <option value="masculino">Masculino</option>
+                      <option value="femenino">Femenino</option>
+                      <option value="otro">Otro</option>
+                    </select>
                   </div>
                 </div>
 
@@ -1253,7 +1295,6 @@ export function ReservationModal({
                       className="w-full text-sm rounded-md border border-slate-300 px-3 py-2"
                       value={form.professionalId ?? ""}
                       onChange={(e) => handleChange("professionalId", Number(e.target.value))}
-                      disabled={agendaTipo === "acondicionamiento" && isProfessionalRole}
                     >
                       {professionals.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -1276,6 +1317,24 @@ export function ReservationModal({
                   </div>
 
                   <div>
+                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">Duración</label>
+                    <select
+                      className="w-full text-sm rounded-md border border-slate-300 px-3 py-2 bg-white"
+                      value={form.durationMinutes ?? 60}
+                      onChange={(e) => handleChange("durationMinutes", Number(e.target.value))}
+                    >
+                      {APPOINTMENT_DURATION_OPTIONS.map((minutes) => (
+                        <option key={minutes} value={minutes}>
+                          {minutes} minutos
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      La tarjeta ocupará exactamente esta duración en la agenda.
+                    </p>
+                  </div>
+
+                  <div>
                     <label className="text-[11px] font-semibold text-slate-600 block mb-1">Hora inicio</label>
                     <select
                       className="w-full text-sm rounded-md border border-slate-300 px-3 py-2"
@@ -1290,7 +1349,7 @@ export function ReservationModal({
                     </select>
 
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Puedes elegir en punto o media hora. En la agenda la tarjeta se muestra ocupando visualmente la hora completa.
+                      Puedes elegir en punto o media hora.
                     </p>
                   </div>
 
@@ -1304,10 +1363,10 @@ export function ReservationModal({
                       value={form.endTime}
                       readOnly
                       disabled
-                      title="Se calcula automáticamente por duración del servicio"
+                      title="Se calcula automáticamente por duración seleccionada"
                     />
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Se calcula automático: inicio + duración del servicio.
+                      Se calcula automático: inicio + duración seleccionada.
                     </p>
                   </div>
                 </div>

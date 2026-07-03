@@ -79,12 +79,13 @@ function toMinutes(time) {
   const mm = parseInt(String(time).slice(3, 5), 10) || 0;
   return hh * 60 + mm;
 }
-function floorToHourMinutes(totalMinutes) {
-  const n = Number(totalMinutes || 0);
-  return Math.floor(n / 60) * 60;
+
+function minutesToTime(totalMinutes) {
+  const total = Math.max(0, Number(totalMinutes || 0));
+  const hh = String(Math.floor(total / 60) % 24).padStart(2, "0");
+  const mm = String(total % 60).padStart(2, "0");
+  return `${hh}:${mm}`;
 }
-
-
 function addMinutesToTime(timeStr, minutesToAdd) {
   if (!timeStr) return "08:00";
   const [h = "0", m = "0"] = String(timeStr).split(":");
@@ -190,6 +191,7 @@ function getAppointmentPalette(appt, professionalsMap) {
   const colorHex = prof?.color_agenda || "#06b6d4";
   return buildProfessionalPalette(colorHex);
 }
+
 function normalizeStaffRole(value) {
   const raw = String(value || "").trim().toLowerCase();
 
@@ -210,6 +212,30 @@ function normalizeStaffRole(value) {
 
 function getProfessionalRole(item) {
   return normalizeStaffRole(item?.rol || item?.role || item?.rol_out || "");
+}
+
+function normalizeAgendaTipo(value, fallback = "") {
+  const raw = String(value || "").trim().toLowerCase();
+  const aliases = {
+    general: "general",
+    acondicionamiento: "acondicionamiento",
+    terapia: "terapia",
+    terapias: "terapia",
+    rehabilitacion: "terapia",
+    rehabilitación: "terapia",
+  };
+  return aliases[raw] || fallback || raw;
+}
+
+function getAppointmentAgendaTipo(item) {
+  return normalizeAgendaTipo(
+    item?.agendaTipo ||
+    item?.agenda_tipo ||
+    item?.tipoAgenda ||
+    item?.agenda ||
+    "",
+    ""
+  );
 }
 
 function HoverCard({ open, anchorRect, children }) {
@@ -380,7 +406,7 @@ function TableView({ appointments, weekDays, professionalsMap }) {
 
       return acc;
     }, {})
-  ).sort((a, b) => a.professional.localeCompare(b.professional));
+  ).sort((a, b) => String(a.professional || "").localeCompare(String(b.professional || "")));
 
   const weekKeys = new Set((weekDays || []).map((d) => dateKey(d)));
   const rowsThisWeek = rows.filter((x) => weekKeys.has(x.date));
@@ -408,11 +434,13 @@ function TableView({ appointments, weekDays, professionalsMap }) {
             <tbody>
               {resumenByDoctor.map((item) => {
                 const prof = professionalsMap.get(Number(item.professionalId));
+                const dotColor = prof?.color_agenda || "#06b6d4";
+
                 return (
                   <tr key={String(item.professionalId || item.professional)} className="border-t border-slate-200">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: prof?.color_agenda || "#06b6d4" }} />
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: dotColor }} />
                         <span className="font-medium text-slate-800">{item.professional}</span>
                       </div>
                     </td>
@@ -460,6 +488,8 @@ function TableView({ appointments, weekDays, professionalsMap }) {
             <tbody>
               {rowsThisWeek.map((item) => {
                 const prof = professionalsMap.get(Number(item.professionalId));
+                const dotColor = prof?.color_agenda || "#06b6d4";
+
                 return (
                   <tr key={item.id} className="border-t border-slate-200">
                     <td className="px-4 py-3">{item.date}</td>
@@ -470,7 +500,7 @@ function TableView({ appointments, weekDays, professionalsMap }) {
                     <td className="px-4 py-3">{item.service}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: prof?.color_agenda || "#06b6d4" }} />
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: dotColor }} />
                         {item.professional}
                       </div>
                     </td>
@@ -501,7 +531,6 @@ export function AgendaView({
   role,
   myUserId,
   agendaTipo = "terapia",
-  tituloAgenda = "Terapia",
   onNewReservation,
   onOpenAppointment,
   onMoveAppointment,
@@ -511,13 +540,6 @@ export function AgendaView({
   onChangeDate,
 }) {
   const isMobile = useMediaQuery("(max-width: 768px)");
-  const [viewMode, setViewMode] = useState("week");
-  const [displayMode, setDisplayMode] = useState("calendar");
-  const [activeApptId, setActiveApptId] = useState(null);
-  const [hoverAppt, setHoverAppt] = useState(null);
-  const [hoverRect, setHoverRect] = useState(null);
-  const [slotMenu, setSlotMenu] = useState(null);
-  const [includeSunday, setIncludeSunday] = useState(false);
 
   const roleNormalizado = normalizeStaffRole(role);
 
@@ -526,8 +548,8 @@ export function AgendaView({
   const isProfessional = isLeadPhysio || isAuxPhysio;
 
   const canSeeAll =
-    roleNormalizado === "admin" ||
     roleNormalizado === "doctor" ||
+    roleNormalizado === "admin" ||
     roleNormalizado === "recepcionista";
 
   const managedProfessionals = useMemo(() => {
@@ -539,6 +561,21 @@ export function AgendaView({
       );
     });
   }, [professionals]);
+
+  const [viewMode, setViewMode] = useState("week");
+  const [displayMode, setDisplayMode] = useState("calendar");
+  const [activeApptId, setActiveApptId] = useState(null);
+  const [hoverAppt, setHoverAppt] = useState(null);
+  const [hoverRect, setHoverRect] = useState(null);
+  const [slotMenu, setSlotMenu] = useState(null);
+
+  const [includeSunday, setIncludeSunday] = useState(() => {
+    return localStorage.getItem(`agenda.${agendaTipo}.includeSunday`) === "1";
+  });
+
+  useEffect(() => {
+    localStorage.setItem(`agenda.${agendaTipo}.includeSunday`, includeSunday ? "1" : "0");
+  }, [agendaTipo, includeSunday]);
 
   const [now, setNow] = useState(() => new Date());
   const todayIso = useMemo(() => dateKey(new Date()), []);
@@ -552,15 +589,61 @@ export function AgendaView({
     if (isMobile) setViewMode("day");
   }, [isMobile]);
 
+  useEffect(() => {
+    const clearHover = () => {
+      setHoverAppt(null);
+      setHoverRect(null);
+    };
+
+    const onKey = (e) => e.key === "Escape" && clearHover();
+    const onScroll = () => clearHover();
+    const onDown = () => clearHover();
+
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("mousedown", onDown, true);
+    window.addEventListener("touchstart", onDown, true);
+
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("mousedown", onDown, true);
+      window.removeEventListener("touchstart", onDown, true);
+    };
+  }, []);
+
   const HOURS = useMemo(
-    () => ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"],
+    () => [
+      "08:00",
+      "09:00",
+      "10:00",
+      "11:00",
+      "12:00",
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00",
+      "17:00",
+      "18:00",
+      "19:00",
+      "20:00",
+    ],
     []
   );
 
   const DAY_START_MIN = toMinutes(HOURS[0]);
   const DAY_END_MIN = toMinutes(HOURS[HOURS.length - 1]) + 60;
   const HOUR_ROW_HEIGHT = 64;
+  const SLOT_STEP_MINUTES = 30;
   const GRID_TOTAL_HEIGHT = HOURS.length * HOUR_ROW_HEIGHT;
+
+  const SLOT_TIMES = useMemo(() => {
+    const slots = [];
+    for (let total = DAY_START_MIN; total < DAY_END_MIN; total += SLOT_STEP_MINUTES) {
+      slots.push(minutesToTime(total));
+    }
+    return slots;
+  }, [DAY_START_MIN, DAY_END_MIN]);
 
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const nowY = ((nowMinutes - DAY_START_MIN) / 60) * HOUR_ROW_HEIGHT;
@@ -578,23 +661,41 @@ export function AgendaView({
     return map;
   }, [professionals]);
 
-  const safeCurrentDate = currentDate instanceof Date ? currentDate : new Date();
-  const monday = startOfWeekMonday(safeCurrentDate);
+  const allowedProfessionals = useMemo(() => {
+    if (isAuxPhysio && myUserId) {
+      return (professionals || []).filter(
+        (p) => Number(p.id) === Number(myUserId)
+      );
+    }
 
-  const weekDays = useMemo(
-    () =>
-      Array.from({ length: includeSunday ? 7 : 6 }, (_, i) => {
-        const d = new Date(monday);
-        d.setDate(monday.getDate() + i);
-        return d;
-      }),
-    [monday, includeSunday]
-  );
+    if (isLeadPhysio) {
+      return managedProfessionals;
+    }
+
+    if (canSeeAll) {
+      return professionals || [];
+    }
+
+    return professionals || [];
+  }, [
+    professionals,
+    isAuxPhysio,
+    myUserId,
+    isLeadPhysio,
+    managedProfessionals,
+    canSeeAll,
+  ]);
 
   const visibleAppointments = useMemo(() => {
-    let list = [...(appointments || [])].filter(
-      (item) => (item.agendaTipo || item.agenda_tipo || "general") === agendaTipo
-    );
+    const currentAgendaTipo = normalizeAgendaTipo(agendaTipo, "");
+
+    let list = [...(appointments || [])].filter((item) => {
+      const itemAgendaTipo = getAppointmentAgendaTipo(item);
+
+      // Si el padre ya filtró y el item no trae agendaTipo, no lo descartamos.
+      // Si sí lo trae, aquí garantizamos que terapia y acondicionamiento no se mezclen.
+      return !itemAgendaTipo || !currentAgendaTipo || itemAgendaTipo === currentAgendaTipo;
+    });
 
     if (isAuxPhysio && myUserId) {
       list = list.filter(
@@ -620,18 +721,54 @@ export function AgendaView({
     });
   }, [
     appointments,
-    professionalsMap,
     agendaTipo,
     isAuxPhysio,
     myUserId,
     isLeadPhysio,
     managedProfessionals,
+    professionalsMap,
   ]);
 
   const activeAppt = useMemo(
     () => (visibleAppointments || []).find((a) => a.id === activeApptId) || null,
     [visibleAppointments, activeApptId]
   );
+
+  const safeCurrentDate = currentDate instanceof Date ? currentDate : new Date();
+  const monday = startOfWeekMonday(safeCurrentDate);
+
+  const weekDays = useMemo(
+    () =>
+      Array.from({ length: includeSunday ? 7 : 6 }, (_, i) => {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        return d;
+      }),
+    [monday, includeSunday]
+  );
+
+  const professionalsInView = useMemo(() => {
+    if (allowedProfessionals.length > 0) return allowedProfessionals;
+
+    const ids = new Set(
+      (visibleAppointments || [])
+        .map((x) => Number(x.professionalId))
+        .filter((v) => Number.isFinite(v))
+    );
+
+    return (professionals || []).filter((p) => ids.has(Number(p.id)));
+  }, [allowedProfessionals, visibleAppointments, professionals]);
+
+  const activeColumns = professionalsInView.length
+    ? professionalsInView
+    : isAuxPhysio && myUserId
+      ? (professionals || []).filter((p) => Number(p.id) === Number(myUserId))
+      : isLeadPhysio
+        ? managedProfessionals
+        : professionals || [];
+
+  const defaultProfessionalId =
+    activeColumns[0]?.id || (isLeadPhysio ? null : myUserId || null);
 
   let headerMainLabel = "";
   if (viewMode === "day") {
@@ -682,27 +819,27 @@ export function AgendaView({
 
       const [dateIso, proId] = k.split("|");
 
-      for (const hour of HOURS) {
-        const hourStart = toMinutes(hour);
-        const hourEnd = hourStart + 60;
+      for (const slotTime of SLOT_TIMES) {
+        const slotStart = toMinutes(slotTime);
+        const slotEnd = slotStart + SLOT_STEP_MINUTES;
 
         const covered = blocks.some((b) => {
           const s = toMinutes(b.time);
           const e = toMinutes(b.endTime || addMinutesToTime(b.time, 60));
-          return overlapsMinutes(hourStart, hourEnd, s, e);
+          return overlapsMinutes(slotStart, slotEnd, s, e);
         });
 
-        if (covered) set.add(`${dateIso}|${Number(proId)}|${hour}`);
+        if (covered) set.add(`${dateIso}|${Number(proId)}|${slotTime}`);
       }
     }
 
     return set;
-  }, [visibleAppointments, HOURS]);
+  }, [visibleAppointments, SLOT_TIMES]);
 
   const findBlockForSlot = useCallback(
     ({ dateIso, professionalId, hour }) => {
       const hourStart = toMinutes(hour);
-      const hourEnd = hourStart + 60;
+      const hourEnd = hourStart + SLOT_STEP_MINUTES;
 
       return (
         (visibleAppointments || []).find((a) => {
@@ -716,7 +853,7 @@ export function AgendaView({
         }) || null
       );
     },
-    [visibleAppointments]
+    [visibleAppointments, SLOT_STEP_MINUTES]
   );
 
   const handlePrev = () => {
@@ -753,9 +890,7 @@ export function AgendaView({
     const newDate = parts[1];
     const newProfessionalId = Number(parts[2]);
     const newTime = `${parts[3]}:${parts[4]}`;
-    const hour = `${parts[3]}:00`;
-
-    const mapKey = `${newDate}|${newProfessionalId}|${hour}`;
+    const mapKey = `${newDate}|${newProfessionalId}|${newTime}`;
     if (blockedSlots.has(mapKey)) {
       alert("No puedes mover una cita a un horario bloqueado.");
       return;
@@ -763,7 +898,7 @@ export function AgendaView({
 
     const oldStart = toMinutes(appt.time);
     const oldEnd = toMinutes(appt.endTime || addMinutesToTime(appt.time, 60));
-    const durMin = Math.max(60, oldEnd - oldStart);
+    const durMin = Math.max(30, oldEnd - oldStart || 60);
 
     const patch = {
       id: appt.id,
@@ -911,6 +1046,9 @@ export function AgendaView({
       const rect = rectFromPoint(e.clientX, e.clientY);
       const blockItem = hasBlock ? findBlockForSlot({ dateIso: date, professionalId, hour }) : null;
 
+      setHoverAppt(null);
+      setHoverRect(null);
+
       setSlotMenu({
         date,
         hour,
@@ -930,10 +1068,10 @@ export function AgendaView({
       .map((a) => {
         const realStart = clamp(toMinutes(a.time), DAY_START_MIN, DAY_END_MIN);
         const realEndRaw = toMinutes(a.endTime || addMinutesToTime(a.time, 60));
-        const realEnd = clamp(Math.max(realEndRaw, realStart + 60), DAY_START_MIN, DAY_END_MIN);
+        const realEnd = clamp(Math.max(realEndRaw, realStart + 30), DAY_START_MIN, DAY_END_MIN);
 
-        const displayStart = clamp(floorToHourMinutes(realStart), DAY_START_MIN, DAY_END_MIN);
-        const displayEnd = clamp(displayStart + 60, DAY_START_MIN, DAY_END_MIN);
+        const displayStart = realStart;
+        const displayEnd = realEnd;
 
         return {
           ...a,
@@ -1056,7 +1194,7 @@ export function AgendaView({
       .map((b) => {
         const s = clamp(toMinutes(b.time), DAY_START_MIN, DAY_END_MIN);
         const eRaw = toMinutes(b.endTime || addMinutesToTime(b.time, 60));
-        const e = clamp(Math.max(eRaw, s + 60), DAY_START_MIN, DAY_END_MIN);
+        const e = clamp(Math.max(eRaw, s + 30), DAY_START_MIN, DAY_END_MIN);
         return { ...b, __s: s, __e: e };
       })
       .sort((a, b) => a.__s - b.__s);
@@ -1068,8 +1206,8 @@ export function AgendaView({
       layouts.set(b.id, {
         top: topPx,
         height: Math.max(28, heightPx),
-        left: `0px`,
-        width: `100%`,
+        left: "0px",
+        width: "100%",
       });
     }
     return layouts;
@@ -1085,44 +1223,44 @@ export function AgendaView({
     const blockLayouts = useMemo(() => computeBlockLayoutsForDay(dayItems), [dayItems]);
     const apptLayouts = useMemo(() => computeLayoutsForDay(dayItems), [dayItems]);
 
-    const blockedByHour = useMemo(() => {
+    const blockedBySlot = useMemo(() => {
       const m = new Map();
       const blocks = (dayItems || []).filter(isBlockItem);
 
-      for (const hour of HOURS) {
-        const hourStart = toMinutes(hour);
-        const hourEnd = hourStart + 60;
+      for (const slotTime of SLOT_TIMES) {
+        const slotStart = toMinutes(slotTime);
+        const slotEnd = slotStart + SLOT_STEP_MINUTES;
 
         const blk = blocks.find((b) => {
           const s = toMinutes(b.time);
           const e = toMinutes(b.endTime || addMinutesToTime(b.time, 60));
-          return overlapsMinutes(hourStart, hourEnd, s, e);
+          return overlapsMinutes(slotStart, slotEnd, s, e);
         });
 
-        m.set(hour, blk || null);
+        m.set(slotTime, blk || null);
       }
       return m;
-    }, [dayItems]);
+    }, [dayItems, SLOT_TIMES]);
 
-    const appointmentsByHour = useMemo(() => {
+    const appointmentsBySlot = useMemo(() => {
       const m = new Map();
       const appts = (dayItems || []).filter((a) => !isBlockItem(a));
 
-      for (const hour of HOURS) {
-        const hourStart = toMinutes(hour);
-        const hourEnd = hourStart + 60;
+      for (const slotTime of SLOT_TIMES) {
+        const slotStart = toMinutes(slotTime);
+        const slotEnd = slotStart + SLOT_STEP_MINUTES;
 
         const overlapping = appts.filter((a) => {
           const s = toMinutes(a.time);
           const e = toMinutes(a.endTime || addMinutesToTime(a.time, 60));
-          return overlapsMinutes(hourStart, hourEnd, s, e);
+          return overlapsMinutes(slotStart, slotEnd, s, e);
         });
 
-        m.set(hour, overlapping);
+        m.set(slotTime, overlapping);
       }
 
       return m;
-    }, [dayItems]);
+    }, [dayItems, SLOT_TIMES]);
 
     return (
       <div className="relative">
@@ -1147,34 +1285,50 @@ export function AgendaView({
         </div>
 
         <div className="relative" style={{ height: GRID_TOTAL_HEIGHT }}>
-          {HOURS.map((hour, idx) => {
-            const y = idx * HOUR_ROW_HEIGHT;
-            const slotId = `slot:${dateIso}:${professionalId}:${hour.slice(0, 2)}:00`;
-            const blockItem = blockedByHour.get(hour);
+          {SLOT_TIMES.map((slotTime) => {
+            const y = ((toMinutes(slotTime) - DAY_START_MIN) / 60) * HOUR_ROW_HEIGHT;
+            const slotHeight = (SLOT_STEP_MINUTES / 60) * HOUR_ROW_HEIGHT;
+            const slotId = `slot:${dateIso}:${professionalId}:${slotTime.slice(0, 2)}:${slotTime.slice(3, 5)}`;
+            const blockItem = blockedBySlot.get(slotTime);
             const hasBlock = Boolean(blockItem);
-            const hasAppointments = (appointmentsByHour.get(hour) || []).length > 0;
+            const hasAppointments = (appointmentsBySlot.get(slotTime) || []).length > 0;
 
             return (
               <div
                 key={slotId}
                 className="absolute left-0 right-0 px-1"
-                style={{ top: y, height: HOUR_ROW_HEIGHT }}
+                style={{ top: y, height: slotHeight }}
               >
                 <DroppableHourSlot
                   id={slotId}
                   disabled={hasBlock}
-                  onClick={(e) => openSlotMenu(e, { date: dateIso, hour, professionalId, hasBlock })}
+                  onClick={(e) =>
+                    openSlotMenu(e, { date: dateIso, hour: slotTime, professionalId, hasBlock })
+                  }
                 >
-                  <div className="group w-[98%] h-[98%] rounded-lg bg-white/70 p-1">
+                  <div className="group relative w-[98%] h-[98%] rounded-lg bg-white/70 p-1">
                     {!hasBlock && (
                       <button
                         type="button"
+                        onPointerUp={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const rect = rectFromElement(e.currentTarget) || rectFromPoint(e.clientX, e.clientY);
+                          setSlotMenu({
+                            date: dateIso,
+                            hour: slotTime,
+                            professionalId,
+                            hasBlock: false,
+                            preferUp: false,
+                            anchorRect: rect,
+                          });
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
                           const rect = rectFromElement(e.currentTarget) || rectFromPoint(e.clientX, e.clientY);
                           setSlotMenu({
                             date: dateIso,
-                            hour,
+                            hour: slotTime,
                             professionalId,
                             hasBlock: false,
                             preferUp: false,
@@ -1182,12 +1336,12 @@ export function AgendaView({
                           });
                         }}
                         className={[
-                          "absolute right-2 top-2 h-8 w-8 rounded-md border border-slate-200 bg-white shadow-sm flex items-center justify-center transition hover:bg-slate-50",
+                          "absolute right-2 top-1 h-7 w-7 rounded-md border border-slate-200 bg-white shadow-sm flex items-center justify-center transition hover:bg-slate-50",
                           hasAppointments ? "z-[30]" : "z-[5]",
                           "opacity-0 group-hover:opacity-100",
                         ].join(" ")}
-                        aria-label="Opciones de hora"
-                        title="Opciones"
+                        aria-label="Opciones de horario"
+                        title={`Opciones ${slotTime}`}
                       >
                         <Plus className="h-4 w-4 text-slate-600" />
                       </button>
@@ -1232,54 +1386,6 @@ export function AgendaView({
     );
   }
 
-  const allowedProfessionals = useMemo(() => {
-    if (isAuxPhysio && myUserId) {
-      return (professionals || []).filter(
-        (p) => Number(p.id) === Number(myUserId)
-      );
-    }
-
-    if (isLeadPhysio) {
-      return managedProfessionals;
-    }
-
-    if (canSeeAll) {
-      return professionals || [];
-    }
-
-    return professionals || [];
-  }, [
-    professionals,
-    isAuxPhysio,
-    myUserId,
-    isLeadPhysio,
-    managedProfessionals,
-    canSeeAll,
-  ]);
-
-  const professionalsInView = useMemo(() => {
-    if (allowedProfessionals.length > 0) return allowedProfessionals;
-
-    const ids = new Set(
-      (visibleAppointments || [])
-        .map((x) => Number(x.professionalId))
-        .filter((v) => Number.isFinite(v))
-    );
-
-    return (professionals || []).filter((p) => ids.has(Number(p.id)));
-  }, [allowedProfessionals, visibleAppointments, professionals]);
-
-  const oneDayProfessionals = professionalsInView.length
-    ? professionalsInView
-    : isAuxPhysio && myUserId
-      ? (professionals || []).filter((p) => Number(p.id) === Number(myUserId))
-      : isLeadPhysio
-        ? managedProfessionals
-        : professionals || [];
-
-  const defaultProfessionalId =
-    oneDayProfessionals[0]?.id || (isLeadPhysio ? null : myUserId || null);
-
   return (
     <>
       <div className="flex flex-col w-full h-full min-h-0 overflow-hidden mb-10">
@@ -1302,7 +1408,7 @@ export function AgendaView({
                 </button>
 
                 <div className="flex flex-col min-w-0">
-                  <span className="text-xs text-slate-500">{tituloAgenda}</span>
+                  <span className="text-xs text-slate-500">Acondicionamiento</span>
                   <span className="text-sm font-semibold text-slate-800 truncate">{headerMainLabel}</span>
                   <span className="text-[11px] text-slate-500 truncate">
                     {isAuxPhysio
@@ -1377,7 +1483,7 @@ export function AgendaView({
                   className="text-xs px-3 py-1 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-slate-600"
                   onClick={() => {
                     const defaultProfessionalId =
-                      oneDayProfessionals[0]?.id || (isLeadPhysio ? null : myUserId || null);
+                      activeColumns[0]?.id || (isLeadPhysio ? null : myUserId || null);
 
                     onOpenBlockModal?.({
                       date: dateKey(safeCurrentDate),
@@ -1393,7 +1499,7 @@ export function AgendaView({
                 <button
                   onClick={() => {
                     const defaultProfessionalId =
-                      oneDayProfessionals[0]?.id || (isLeadPhysio ? null : myUserId || null);
+                      activeColumns[0]?.id || (isLeadPhysio ? null : myUserId || null);
 
                     onNewReservation?.({
                       date: dateKey(safeCurrentDate),
@@ -1409,7 +1515,7 @@ export function AgendaView({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              {(oneDayProfessionals || []).map((pro) => {
+              {(activeColumns || []).map((pro) => {
                 const label =
                   `${pro.first_name || ""} ${pro.last_name || ""}`.trim() || pro.username || `Profesional ${pro.id}`;
 
@@ -1432,7 +1538,11 @@ export function AgendaView({
 
           <div className="flex-1 overflow-auto bg-white min-h-0">
             {displayMode === "table" ? (
-              <TableView appointments={visibleAppointments} weekDays={weekDays} professionalsMap={professionalsMap} />
+              <TableView
+                appointments={visibleAppointments}
+                weekDays={weekDays}
+                professionalsMap={professionalsMap}
+              />
             ) : (
               <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                 <div className={isMobile ? "min-w-0" : "min-w-[1200px]"}>
@@ -1441,12 +1551,12 @@ export function AgendaView({
                       <div
                         className="grid border-b border-slate-200 bg-slate-50 text-xs text-slate-500"
                         style={{
-                          gridTemplateColumns: `64px repeat(${oneDayProfessionals.length || 1}, minmax(220px, 1fr))`,
+                          gridTemplateColumns: `64px repeat(${activeColumns.length || 1}, minmax(220px, 1fr))`,
                         }}
                       >
                         <div className="p-2 text-right pr-3">Hora</div>
 
-                        {(oneDayProfessionals || []).map((pro) => {
+                        {(activeColumns || []).map((pro) => {
                           const label =
                             `${pro.first_name || ""} ${pro.last_name || ""}`.trim() || pro.username;
                           return (
@@ -1460,7 +1570,7 @@ export function AgendaView({
                       <div
                         className="grid text-xs"
                         style={{
-                          gridTemplateColumns: `64px repeat(${oneDayProfessionals.length || 1}, minmax(220px, 1fr))`,
+                          gridTemplateColumns: `64px repeat(${activeColumns.length || 1}, minmax(220px, 1fr))`,
                         }}
                       >
                         <div
@@ -1489,7 +1599,7 @@ export function AgendaView({
                           )}
                         </div>
 
-                        {(oneDayProfessionals || []).map((pro) => (
+                        {(activeColumns || []).map((pro) => (
                           <div key={pro.id} className="border-r border-slate-100 relative">
                             <DayColumn dateIso={keyDate} professionalId={pro.id} />
                           </div>
@@ -1509,7 +1619,7 @@ export function AgendaView({
                           <div
                             className="grid text-xs"
                             style={{
-                              gridTemplateColumns: `64px repeat(${oneDayProfessionals.length || 1}, minmax(220px, 1fr))`,
+                              gridTemplateColumns: `64px repeat(${activeColumns.length || 1}, minmax(220px, 1fr))`,
                             }}
                           >
                             <div
@@ -1538,7 +1648,7 @@ export function AgendaView({
                               )}
                             </div>
 
-                            {(oneDayProfessionals || []).map((pro) => (
+                            {(activeColumns || []).map((pro) => (
                               <div key={`${day.key}-${pro.id}`} className="border-r border-slate-100 relative">
                                 <div className="p-2 bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-600">
                                   {`${pro.first_name || ""} ${pro.last_name || ""}`.trim() || pro.username}
@@ -1560,8 +1670,8 @@ export function AgendaView({
                         <div
                           className="rounded-md border text-[11px] px-2 py-1 shadow-md"
                           style={{
-                            backgroundColor: activeAppt.__cardStyle?.backgroundColor,
-                            borderColor: activeAppt.__cardStyle?.borderColor,
+                            backgroundColor: activeAppt.__cardStyle?.backgroundColor || "#fff",
+                            borderColor: activeAppt.__cardStyle?.borderColor || "#cbd5e1",
                             color: activeAppt.__cardStyle?.color || "#0f172a",
                           }}
                         >
@@ -1604,6 +1714,14 @@ export function AgendaView({
                   </div>
                   <div className="text-[11px] text-slate-600">
                     <span className="font-semibold">Estado:</span> {hoverAppt.status}
+                  </div>
+                  <div className="text-[11px] text-slate-600">
+                    <span className="font-semibold">Pagado:</span>{" "}
+                    {hoverAppt.paid ? (
+                      <span className="text-emerald-700 font-semibold">Sí</span>
+                    ) : (
+                      <span className="text-slate-600">No</span>
+                    )}
                   </div>
                 </>
               )}
@@ -1667,7 +1785,18 @@ export function AgendaView({
               onClick={() => {
                 const b = slotMenu?.blockItem;
                 setSlotMenu(null);
-                if (!b) return;
+                if (!b) {
+                  alert("No pude identificar el bloqueo de este horario.");
+                  return;
+                }
+
+                const ok = confirm(
+                  `¿Eliminar bloqueo?\n\n${b.date} ${String(b.time).slice(0, 5)}–${String(
+                    b.endTime || ""
+                  ).slice(0, 5)}\nMotivo: ${b.motivo || "No disponible"}`
+                );
+                if (!ok) return;
+
                 onDeleteBlock?.(b);
               }}
               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-200 hover:bg-rose-50 text-sm text-rose-700"
@@ -1686,6 +1815,7 @@ export function AgendaView({
                 onOpenBlockModal?.({
                   date: s.date,
                   startTime: s.hour,
+                  endTime: addMinutesToTime(s.hour, 60),
                   professionalId: s.professionalId,
                 });
               }}
