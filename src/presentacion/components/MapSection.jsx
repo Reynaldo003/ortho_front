@@ -15,7 +15,8 @@ import {
 export default function MapSection() {
   // Links de ejemplo: cámbialos por los reales
   const phone = "2712105761";
-  const telHref = `tel:${phone}`;
+  const llamadas = "2717176619";
+  const telHref = `tel:${llamadas}`;
   const waHref = `https://wa.me/52${phone}`;
   const gmapsLink = "https://maps.app.goo.gl/o7rTH8jtqBXAVNjA7";
   const gmapsDirections =
