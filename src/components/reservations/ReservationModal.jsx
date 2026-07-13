@@ -47,6 +47,23 @@ function addMinutesToTime(timeStr, minutesToAdd) {
   return `${hh}:${mm}`;
 }
 
+function timeToMinutes(timeStr) {
+  if (!timeStr) return null;
+  const [h = "0", m = "0"] = String(timeStr).split(":");
+  const hours = Number(h);
+  const minutes = Number(m);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function getDurationFromTimes(startTime, endTime, fallback = 60) {
+  const start = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  if (start == null || end == null || end <= start) return fallback;
+  const diff = end - start;
+  return APPOINTMENT_DURATIONS.some((item) => item.value === diff) ? diff : fallback;
+}
+
 function normalizeRole(value) {
   const raw = String(value || "").trim().toLowerCase();
   const aliases = {
@@ -139,6 +156,19 @@ const PAYMENT_METHODS = [
   { id: "transferencia", label: "Transferencia", icon: Landmark },
   { id: "efectivo", label: "Efectivo", icon: Banknote },
   { id: "otro", label: "Otro", icon: CreditCard },
+];
+
+const APPOINTMENT_DURATIONS = [
+  { value: 30, label: "30 minutos" },
+  { value: 50, label: "50 minutos" },
+  { value: 60, label: "60 minutos" },
+];
+
+const GENDER_OPTIONS = [
+  { value: "", label: "Selecciona género" },
+  { value: "masculino", label: "Masculino" },
+  { value: "femenino", label: "Femenino" },
+  { value: "otro", label: "Otro" },
 ];
 
 function normalizePhoneMX(raw) {
@@ -279,7 +309,12 @@ export function ReservationModal({
 
       date: initialDate,
       time: initialTime,
-      endTime: appointment?.endTime ?? "09:00",
+      durationMinutes: getDurationFromTimes(
+        initialTime,
+        appointment?.endTime ?? addMinutesToTime(initialTime, 60),
+        60
+      ),
+      endTime: appointment?.endTime ?? addMinutesToTime(initialTime, 60),
 
       serviceId: appointment?.serviceId ?? null,
       professionalId: appointment?.professionalId ?? preset?.professionalId ?? null,
@@ -331,7 +366,7 @@ export function ReservationModal({
 
         const [servicesResp, profsResp, patientsResp] = await Promise.all([
           fetch(`${API_BASE}/api/servicios/`),
-          fetch(`${API_BASE}/api/profesionales/`, {
+          fetch(`${API_BASE}/api/profesionales/?roles=doctor,fisioterapeuta,aux_fisioterapia`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch(`${API_BASE}/api/pacientes/`, {
@@ -343,22 +378,20 @@ export function ReservationModal({
         const profsData = await profsResp.json();
         const patientsData = await patientsResp.json();
 
-        const doctorsOnly = (Array.isArray(profsData) ? profsData : []).filter(isDoctorRole);
+        const clinicalProfessionals = Array.isArray(profsData) ? profsData : [];
 
         setServices(servicesData);
-        setProfessionals(doctorsOnly);
+        setProfessionals(clinicalProfessionals);
         setPatients(patientsData);
 
         setForm((prev) => {
           const serviceId = prev.serviceId ?? (servicesData[0]?.id ?? null);
-          const professionalId = prev.professionalId ?? (doctorsOnly[0]?.id ?? null);
+          const professionalId = prev.professionalId ?? (clinicalProfessionals[0]?.id ?? null);
 
           const service =
             servicesData.find((s) => s.id === serviceId) || servicesData[0] || null;
 
-          const durationMinutes = service
-            ? durationToMinutes(service.duracion || service.duracion_str || service.duracion_text)
-            : 60;
+          const durationMinutes = Number(prev.durationMinutes || 60);
 
           const baseTime = prev.time || "08:00";
           const endTime = addMinutesToTime(baseTime, durationMinutes);
@@ -369,9 +402,9 @@ export function ReservationModal({
           const patientId = prev.patientId ?? null;
           const p = patientsData.find((x) => x.id === patientId) || null;
 
-          const professionalIdFinal = doctorsOnly.some((p) => Number(p.id) === Number(professionalId))
+          const professionalIdFinal = clinicalProfessionals.some((p) => Number(p.id) === Number(professionalId))
             ? professionalId
-            : (doctorsOnly[0]?.id ?? null);
+            : (clinicalProfessionals[0]?.id ?? null);
 
           return {
             ...prev,
@@ -484,18 +517,28 @@ export function ReservationModal({
     setPatientQuery(form.patient || "");
   }, [form.patient]);
 
-  const getSelectedServiceDurationMinutes = (serviceId) => {
-    const s = (services || []).find((x) => Number(x.id) === Number(serviceId));
-    return s ? durationToMinutes(s.duracion || s.duracion_str || s.duracion_text) : 60;
+  const getSelectedDurationMinutes = (value = form.durationMinutes) => {
+    const minutes = Number(value || 60);
+    return APPOINTMENT_DURATIONS.some((item) => item.value === minutes) ? minutes : 60;
   };
 
   const handleChange = (field, value) => {
     if (field === "time") {
-      const durationMinutes = getSelectedServiceDurationMinutes(form.serviceId);
+      const durationMinutes = getSelectedDurationMinutes();
       setForm((prev) => ({
         ...prev,
         time: value,
         endTime: addMinutesToTime(value, durationMinutes),
+      }));
+      return;
+    }
+
+    if (field === "durationMinutes") {
+      const durationMinutes = getSelectedDurationMinutes(value);
+      setForm((prev) => ({
+        ...prev,
+        durationMinutes,
+        endTime: addMinutesToTime(prev.time, durationMinutes),
       }));
       return;
     }
@@ -514,11 +557,8 @@ export function ReservationModal({
     const serviceId = Number(serviceIdStr);
     const service = services.find((s) => s.id === serviceId);
 
-    const durationMinutes = service
-      ? durationToMinutes(service.duracion || service.duracion_str || service.duracion_text)
-      : 60;
-
     setForm((prev) => {
+      const durationMinutes = getSelectedDurationMinutes(prev.durationMinutes);
       const newPrice = service ? Math.max(0, Number(service.precio || 0)) : 0;
 
       return {
@@ -545,14 +585,22 @@ export function ReservationModal({
     return match;
   }, [patients, normalizedPhone, form.patientId, appointment?.patientId]);
 
-  const phoneDuplicateError = Boolean(duplicatePatient);
+  // Aviso informativo: el teléfono puede repetirse entre pacientes
+  // (por ejemplo, menor de edad o adulto mayor con tutor).
+  // No debe bloquear el guardado.
+  const phoneDuplicateNotice = Boolean(duplicatePatient);
 
   const timeSlots = useMemo(() => {
     const slots = [];
-    for (let h = 7; h <= 21; h++) {
-      const hh = String(h).padStart(2, "0");
-      slots.push({ time: `${hh}:00`, busy: false });
+    const start = 7 * 60;
+    const end = 21 * 60;
+
+    for (let total = start; total <= end; total += 30) {
+      const hh = String(Math.floor(total / 60)).padStart(2, "0");
+      const mm = String(total % 60).padStart(2, "0");
+      slots.push({ time: `${hh}:${mm}`, busy: false });
     }
+
     return slots;
   }, []);
 
@@ -656,6 +704,8 @@ export function ReservationModal({
     payload.repeatWeeks = Math.max(1, toNumberSafe(payload.repeatWeeks, 1));
     payload.repeatSessions = Math.max(1, toNumberSafe(payload.repeatSessions, 1));
     payload.repeatDays = Array.isArray(payload.repeatDays) ? payload.repeatDays : [];
+    payload.durationMinutes = getSelectedDurationMinutes(payload.durationMinutes);
+    payload.endTime = addMinutesToTime(payload.time, payload.durationMinutes);
 
     if (!payload.patientId) payload.patientId = null;
 
@@ -870,22 +920,18 @@ export function ReservationModal({
       return;
     }
 
-    if (!form.patientId && phoneDuplicateError) {
-      setMsg({
-        open: true,
-        title: "Validación",
-        message: "El teléfono ya existe en otro paciente. Selecciona al paciente existente o cambia el número.",
-      });
-      return;
-    }
 
     try {
       setSavingRepeat(true);
 
       const wasPaidBefore = Boolean(appointment?.paid);
 
-      const durationMinutes = getSelectedServiceDurationMinutes(form.serviceId);
-      const fixed = { ...form, endTime: addMinutesToTime(form.time, durationMinutes) };
+      const durationMinutes = getSelectedDurationMinutes(form.durationMinutes);
+      const fixed = {
+        ...form,
+        durationMinutes,
+        endTime: addMinutesToTime(form.time, durationMinutes),
+      };
 
       const basePayload = buildPayload(fixed);
       const savedBase = await onSave?.(basePayload);
@@ -1130,7 +1176,7 @@ export function ReservationModal({
                         autoComplete="off"
                         className={[
                           "w-full text-sm rounded-md border px-3 py-2",
-                          phoneDuplicateError ? "border-red-400 ring-2 ring-red-200" : "border-slate-300",
+                          phoneDuplicateNotice ? "border-amber-400 ring-2 ring-amber-100" : "border-slate-300",
                         ].join(" ")}
                         value={form.telefono}
                         onChange={(e) => handleChange("telefono", e.target.value)}
@@ -1146,11 +1192,12 @@ export function ReservationModal({
                     </div>
                   </div>
 
-                  {phoneDuplicateError && (
-                    <p className="mt-1 text-[11px] text-red-600 font-semibold">
-                      Número duplicado: ya existe en otro paciente ({getPatientLabel(duplicatePatient)}).
-                      Selecciónalo del desplegable o cambia el teléfono.
-                    </p>
+                  {phoneDuplicateNotice && (
+                    <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 md:col-span-3">
+                      <span className="font-semibold">Aviso:</span> este número también está registrado en
+                      otro paciente ({getPatientLabel(duplicatePatient)}). Puedes guardar este paciente nuevo
+                      con el mismo teléfono si el número pertenece al tutor, familiar o responsable.
+                    </div>
                   )}
 
                   <div className="md:col-span-2">
@@ -1167,14 +1214,19 @@ export function ReservationModal({
 
                   <div>
                     <label className="text-[11px] font-semibold text-slate-600 block mb-1">Género</label>
-                    <input
-                      type="text"
+                    <select
                       name="genero_no_autofill"
                       autoComplete="off"
-                      className="w-full text-sm rounded-md border border-slate-300 px-3 py-2"
+                      className="w-full text-sm rounded-md border border-slate-300 px-3 py-2 bg-white"
                       value={form.genero}
                       onChange={(e) => handleChange("genero", e.target.value)}
-                    />
+                    >
+                      {GENDER_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -1271,7 +1323,7 @@ export function ReservationModal({
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">Hora inicio (por hora)</label>
+                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">Hora inicio</label>
                     <select
                       className="w-full text-sm rounded-md border border-slate-300 px-3 py-2"
                       value={form.time}
@@ -1285,7 +1337,25 @@ export function ReservationModal({
                     </select>
 
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Se permiten múltiples citas dentro de la misma hora desde el panel administrativo.
+                      Puedes iniciar citas cada 30 minutos.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-600 block mb-1">Duración</label>
+                    <select
+                      className="w-full text-sm rounded-md border border-slate-300 px-3 py-2 bg-white"
+                      value={form.durationMinutes ?? 60}
+                      onChange={(e) => handleChange("durationMinutes", Number(e.target.value))}
+                    >
+                      {APPOINTMENT_DURATIONS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Define cuánto ocupará la cita en la agenda.
                     </p>
                   </div>
 
@@ -1299,10 +1369,10 @@ export function ReservationModal({
                       value={form.endTime}
                       readOnly
                       disabled
-                      title="Se calcula automáticamente por duración del servicio"
+                      title="Se calcula automáticamente por la duración seleccionada"
                     />
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Se calcula automático: inicio + duración del servicio.
+                      Se calcula automático: inicio + duración seleccionada.
                     </p>
                   </div>
                 </div>
@@ -1552,7 +1622,7 @@ export function ReservationModal({
 
                 <button
                   type="submit"
-                  disabled={savingRepeat || (!form.patientId && phoneDuplicateError)}
+                  disabled={savingRepeat}
                   className="h-10 px-6 rounded-md bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-60"
                 >
                   {savingRepeat ? "Guardando..." : isEditing ? "Guardar cambios" : "Crear cita"}

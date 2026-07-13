@@ -1,3 +1,4 @@
+// src/presentacion/components/DailyCalendar.jsx
 import { useEffect, useMemo, useState } from "react";
 
 const RAW_API_BASE = "https://ortho-clinic-cordoba.cloud";
@@ -59,15 +60,78 @@ function buildNextDays(total = 14) {
   return days;
 }
 
-function buildSlots() {
-  const slots = [];
+function normalizeText(value = "") {
+  return String(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  for (let hour = 9; hour < 20; hour += 1) {
-    slots.push(`${pad2(hour)}:00`);
-    slots.push(`${pad2(hour)}:30`);
+const HORARIOS_POR_AGENDA = {
+  terapia: [
+    [8 * 60, 13 * 60],
+    [15 * 60, 19 * 60],
+  ],
+  acondicionamiento: [
+    [9 * 60, 13 * 60],
+    [15 * 60, 18 * 60],
+  ],
+  general: [[9 * 60, 20 * 60]],
+};
+
+const HORARIOS_POR_PROFESIONAL = [
+  {
+    nombreTokens: ["miguel", "puig"],
+    ventanas: [
+      [10 * 60, 14 * 60],
+      [16 * 60, 19 * 60],
+    ],
+  },
+  {
+    nombreTokens: ["martin", "buganza"],
+    ventanas: [
+      [13 * 60, 15 * 60],
+      [17 * 60, 19 * 60],
+    ],
+  },
+];
+
+function getScheduleWindows({ agendaTipo = "general", personName = "", personSlug = "" }) {
+  const agendaKey = String(agendaTipo || "general").trim().toLowerCase();
+  const personaNormalizada = normalizeText(`${personName || ""} ${personSlug || ""}`);
+
+  const reglaProfesional = HORARIOS_POR_PROFESIONAL.find((regla) => {
+    return regla.nombreTokens.every((token) => personaNormalizada.includes(token));
+  });
+
+  if (reglaProfesional) {
+    return reglaProfesional.ventanas;
   }
 
-  return slots;
+  return HORARIOS_POR_AGENDA[agendaKey] || HORARIOS_POR_AGENDA.general;
+}
+
+function buildSlotsFromWindows(windows, stepMin = 30) {
+  const out = [];
+
+  for (const [start, end] of windows || []) {
+    for (let current = start; current < end; current += stepMin) {
+      const hour = Math.floor(current / 60);
+      const minute = current % 60;
+      out.push(`${pad2(hour)}:${pad2(minute)}`);
+    }
+  }
+
+  return [...new Set(out)].sort();
+}
+
+function isSlotInsideWindows(slotStart, slotEnd, windows) {
+  return windows.some(([windowStart, windowEnd]) => {
+    return slotStart >= windowStart && slotEnd <= windowEnd;
+  });
 }
 
 function timeToMinutes(value) {
@@ -112,7 +176,26 @@ function fetchJson(url) {
 
 export default function DailyCalendar({ person, selectedService, onPick }) {
   const days = useMemo(() => buildNextDays(14), []);
-  const slots = useMemo(() => buildSlots(), []);
+
+  const agendaTipo = useMemo(() => {
+    return selectedService?.agenda_tipo || "general";
+  }, [selectedService]);
+
+  const durationMinutes = useMemo(() => {
+    return Number(selectedService?.minutes || 60);
+  }, [selectedService]);
+
+  const scheduleWindows = useMemo(() => {
+    return getScheduleWindows({
+      agendaTipo,
+      personName: person?.name || "",
+      personSlug: person?.slug || "",
+    });
+  }, [agendaTipo, person?.name, person?.slug]);
+
+  const slots = useMemo(() => {
+    return buildSlotsFromWindows(scheduleWindows, 30);
+  }, [scheduleWindows]);
 
   const [selectedDate, setSelectedDate] = useState(days[0] || "");
   const [selectedTime, setSelectedTime] = useState("");
@@ -120,14 +203,6 @@ export default function DailyCalendar({ person, selectedService, onPick }) {
   const [loading, setLoading] = useState(false);
   const [calendarError, setCalendarError] = useState("");
   const [currentMinutes, setCurrentMinutes] = useState(getCurrentMinutes());
-
-  const durationMinutes = useMemo(() => {
-    return Number(selectedService?.minutes || 60);
-  }, [selectedService]);
-
-  const agendaTipo = useMemo(() => {
-    return selectedService?.agenda_tipo || "general";
-  }, [selectedService]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -185,7 +260,7 @@ export default function DailyCalendar({ person, selectedService, onPick }) {
       const slotStart = timeToMinutes(slot);
       const slotEnd = slotStart + durationMinutes;
 
-      if (slotEnd > 20 * 60) {
+      if (!isSlotInsideWindows(slotStart, slotEnd, scheduleWindows)) {
         return false;
       }
 
@@ -201,7 +276,7 @@ export default function DailyCalendar({ person, selectedService, onPick }) {
 
       return !isBusy;
     });
-  }, [slots, busyRanges, durationMinutes, selectedDate, currentMinutes]);
+  }, [slots, busyRanges, durationMinutes, selectedDate, currentMinutes, scheduleWindows]);
 
   useEffect(() => {
     if (!availableSlots.length) {

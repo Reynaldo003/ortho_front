@@ -1,3 +1,4 @@
+//src/presentacion/pages/AgendaFisioterapia.jsx
 import { Link, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
@@ -80,16 +81,18 @@ function buildNextDays(n = 14) {
   return out;
 }
 
-function buildSlots({ startHour = 8, endHour = 20, stepMin = 30 }) {
+function buildSlotsFromWindows(windows, stepMin = 30) {
   const out = [];
 
-  for (let h = startHour; h < endHour; h++) {
-    for (let m = 0; m < 60; m += stepMin) {
-      out.push(`${pad2(h)}:${pad2(m)}`);
+  for (const [start, end] of windows || []) {
+    for (let current = start; current < end; current += stepMin) {
+      const hour = Math.floor(current / 60);
+      const minute = current % 60;
+      out.push(`${pad2(hour)}:${pad2(minute)}`);
     }
   }
 
-  return out;
+  return [...new Set(out)].sort();
 }
 
 function normalizePhone(value) {
@@ -104,6 +107,57 @@ function normalizeText(value = "") {
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+
+const HORARIOS_POR_AGENDA = {
+  terapia: [
+    [8 * 60, 13 * 60],
+    [15 * 60, 19 * 60],
+  ],
+  acondicionamiento: [
+    [9 * 60, 13 * 60],
+    [15 * 60, 18 * 60],
+  ],
+  general: [[9 * 60, 20 * 60]],
+};
+
+const HORARIOS_POR_PROFESIONAL = [
+  {
+    nombreTokens: ["miguel", "puig"],
+    ventanas: [
+      [10 * 60, 14 * 60],
+      [15 * 60, 18 * 60],
+    ],
+  },
+  {
+    nombreTokens: ["martin", "buganza"],
+    ventanas: [
+      [13 * 60, 15 * 60],
+      [17 * 60, 19 * 60],
+    ],
+  },
+];
+
+function getScheduleWindows({ agendaTipo = "general", personName = "", personSlug = "" }) {
+  const agendaKey = String(agendaTipo || "general").trim().toLowerCase();
+  const personaNormalizada = normalizeText(`${personName || ""} ${personSlug || ""}`);
+
+  const reglaProfesional = HORARIOS_POR_PROFESIONAL.find((regla) => {
+    return regla.nombreTokens.every((token) => personaNormalizada.includes(token));
+  });
+
+  if (reglaProfesional) {
+    return reglaProfesional.ventanas;
+  }
+
+  return HORARIOS_POR_AGENDA[agendaKey] || HORARIOS_POR_AGENDA.general;
+}
+
+function isSlotInsideWindows(slotStart, slotEnd, windows) {
+  return (windows || []).some(([windowStart, windowEnd]) => {
+    return slotStart >= windowStart && slotEnd <= windowEnd;
+  });
 }
 
 function timeToMinutes(value) {
@@ -182,10 +236,17 @@ export default function AgendaFisioterapia() {
     tipo === "adulto-mayor" ? "acondicionamiento" : "terapia";
 
   const dateOptions = useMemo(() => buildNextDays(14), []);
-  const allSlots = useMemo(
-    () => buildSlots({ startHour: 8, endHour: 20, stepMin: 30 }),
-    []
-  );
+
+  const scheduleWindows = useMemo(() => {
+    return getScheduleWindows({
+      agendaTipo: expectedAgendaTipo,
+      personName: FERNANDO_NAME,
+    });
+  }, [expectedAgendaTipo]);
+
+  const allSlots = useMemo(() => {
+    return buildSlotsFromWindows(scheduleWindows, 30);
+  }, [scheduleWindows]);
 
   const [services, setServices] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(true);
@@ -331,7 +392,7 @@ export default function AgendaFisioterapia() {
       const slotStart = timeToMinutes(slot);
       const slotEnd = slotStart + minutes;
 
-      if (slotEnd > 20 * 60) {
+      if (!isSlotInsideWindows(slotStart, slotEnd, scheduleWindows)) {
         return false;
       }
 
@@ -345,7 +406,7 @@ export default function AgendaFisioterapia() {
         return overlaps(slotStart, slotEnd, busyStart, busyEnd);
       });
     });
-  }, [allSlots, selectedService, busyRanges, dateISO, currentMinutes]);
+  }, [allSlots, selectedService, busyRanges, dateISO, currentMinutes, scheduleWindows]);
 
   useEffect(() => {
     if (!availableSlots.length) {
